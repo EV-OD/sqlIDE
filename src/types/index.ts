@@ -123,6 +123,7 @@ export interface EditorTab {
   isDirty: boolean;
   // For diagram tabs
   connectionId?: string;
+  databaseName?: string;
   diagramStyle?: DiagramStyle;
   diagramTheme?: string;
   diagramCurve?: string;

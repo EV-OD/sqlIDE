@@ -137,17 +137,20 @@ pub async fn get_mysql_schema(connection_string: &str) -> Result<Schema, String>
         .map_err(|e| format!("Invalid connection string: {}", e))?;
     let database_name = url.path().trim_start_matches('/').to_string();
 
-    if database_name.is_empty() {
-        return Err("Database name not found in connection string".to_string());
-    }
-
     let pool = MySqlPoolOptions::new()
         .max_connections(1)
         .connect(connection_string)
         .await
         .map_err(|e| format!("Failed to connect to MySQL: {}", e))?;
 
-    let columns_rows = sqlx::query(
+    // If no database specified, get schema from all user databases
+    let database_filter = if database_name.is_empty() {
+        "TABLE_SCHEMA NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')".to_string()
+    } else {
+        format!("TABLE_SCHEMA = '{}'", database_name.replace("'", "''"))
+    };
+
+    let columns_query = format!(
         r#"
         SELECT 
             TABLE_NAME as table_name, 
@@ -156,17 +159,19 @@ pub async fn get_mysql_schema(connection_string: &str) -> Result<Schema, String>
         FROM 
             INFORMATION_SCHEMA.COLUMNS 
         WHERE 
-            TABLE_SCHEMA = ? 
+            {} 
         ORDER BY 
             TABLE_NAME, ORDINAL_POSITION
         "#,
-    )
-    .bind(&database_name)
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| format!("Failed to query columns: {}", e))?;
+        database_filter
+    );
 
-    let constraints_rows = sqlx::query(
+    let columns_rows = sqlx::query(&columns_query)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| format!("Failed to query columns: {}", e))?;
+
+    let constraints_query = format!(
         r#"
         SELECT 
             kcu.TABLE_NAME as table_name,
@@ -181,14 +186,16 @@ pub async fn get_mysql_schema(connection_string: &str) -> Result<Schema, String>
             ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME 
             AND kcu.TABLE_SCHEMA = tc.TABLE_SCHEMA
         WHERE 
-            kcu.TABLE_SCHEMA = ? 
+            kcu.{} 
             AND tc.CONSTRAINT_TYPE IN ('PRIMARY KEY', 'FOREIGN KEY')
         "#,
-    )
-    .bind(&database_name)
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| format!("Failed to query constraints: {}", e))?;
+        database_filter
+    );
+
+    let constraints_rows = sqlx::query(&constraints_query)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| format!("Failed to query constraints: {}", e))?;
 
     let mut tables_map: std::collections::HashMap<String, Table> =
         std::collections::HashMap::new();

@@ -24,12 +24,25 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
   const curve = tab.diagramCurve || diagramSettings.curve;
   const background = tab.diagramBackground || diagramSettings.background;
 
-  const buildConnectionString = (conn: SavedConnection): string => {
+  const buildConnectionString = (conn: SavedConnection, dbName?: string): string => {
+    // Use the database name from the tab if available, otherwise from the connection
+    const database = dbName || conn.database || "";
+    
     if (conn.connectionMode === "string" && conn.connectionString) {
+      // If using connection string mode, we need to replace or append the database
+      if (dbName) {
+        try {
+          const url = new URL(conn.connectionString);
+          url.pathname = "/" + dbName;
+          return url.toString();
+        } catch {
+          return conn.connectionString;
+        }
+      }
       return conn.connectionString;
     }
 
-    const { user, password, host, port, database, dbType } = conn;
+    const { user, password, host, port, dbType } = conn;
     if (dbType === "postgresql" || dbType === "sqlite") {
       return `postgresql://${user}:${password}@${host || "localhost"}:${port || "5432"}/${database}`;
     } else if (dbType === "mysql" || dbType === "mariadb") {
@@ -48,7 +61,7 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
     setError(null);
 
     try {
-      const connectionString = buildConnectionString(connection);
+      const connectionString = buildConnectionString(connection, tab.databaseName);
 
       // Map dbType correctly
       let dbType = connection.dbType;

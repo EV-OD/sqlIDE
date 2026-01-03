@@ -165,28 +165,37 @@ function TableNode({ table, dbName, level }: TableNodeProps) {
 interface DatabaseNodeProps {
   database: DatabaseInfo;
   level: number;
+  onContextMenu: (e: React.MouseEvent, databaseName: string) => void;
 }
 
-function DatabaseNode({ database, level }: DatabaseNodeProps) {
+function DatabaseNode({ database, level, onContextMenu }: DatabaseNodeProps) {
   const tables = database.tables || [];
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onContextMenu(e, database.name);
+  };
+
   return (
-    <TreeNode
-      nodeId={database.name}
-      label={database.name}
-      icon={<Database className="w-4 h-4 text-blue-500" />}
-      level={level}
-      isExpandable={tables.length > 0}
-    >
-      {tables.map((table) => (
-        <TableNode
-          key={`${database.name}.${table.name}`}
-          table={table}
-          dbName={database.name}
-          level={level + 1}
-        />
-      ))}
-    </TreeNode>
+    <div onContextMenu={handleContextMenu}>
+      <TreeNode
+        nodeId={database.name}
+        label={database.name}
+        icon={<Database className="w-4 h-4 text-blue-500" />}
+        level={level}
+        isExpandable={tables.length > 0}
+      >
+        {tables.map((table) => (
+          <TableNode
+            key={`${database.name}.${table.name}`}
+            table={table}
+            dbName={database.name}
+            level={level + 1}
+          />
+        ))}
+      </TreeNode>
+    </div>
   );
 }
 
@@ -194,7 +203,7 @@ export default function DatabaseExplorer() {
   const { activeConnection, databases, setDatabases, openErDiagram } = useAppStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; databaseName?: string } | null>(null);
 
   // Fetch databases when connection changes
   useEffect(() => {
@@ -224,19 +233,19 @@ export default function DatabaseExplorer() {
     fetchDatabases();
   };
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const handleContextMenu = (e: React.MouseEvent, databaseName?: string) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY });
+    setContextMenu({ x: e.clientX, y: e.clientY, databaseName });
   };
 
   const handleOpenErDiagram = () => {
     if (activeConnection) {
-      openErDiagram(activeConnection);
+      openErDiagram(activeConnection, contextMenu?.databaseName);
     }
   };
 
   return (
-    <div className="h-full flex flex-col" onContextMenu={handleContextMenu}>
+    <div className="h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800">
         <div className="flex items-center gap-2 min-w-0">
@@ -295,7 +304,7 @@ export default function DatabaseExplorer() {
           </div>
         ) : (
           databases.map((db) => (
-            <DatabaseNode key={db.name} database={db} level={0} />
+            <DatabaseNode key={db.name} database={db} level={0} onContextMenu={handleContextMenu} />
           ))
         )}
       </div>

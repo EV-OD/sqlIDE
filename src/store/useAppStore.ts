@@ -64,7 +64,7 @@ interface AppState {
   setDiagramSettings: (settings: Partial<DiagramSettings>) => void;
 
   // Open ER Diagram for a connection
-  openErDiagram: (connection: SavedConnection) => void;
+  openErDiagram: (connection: SavedConnection, databaseName?: string) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -295,23 +295,25 @@ export const useAppStore = create<AppState>()(
         })),
 
       // Open ER Diagram for a connection
-      openErDiagram: (connection) => {
+      openErDiagram: (connection, databaseName) => {
         const id = uuidv4();
         set((state) => {
-          // Check if there's already a diagram tab for this connection
+          // Check if there's already a diagram tab for this connection and database
           const existingTab = state.editorTabs.find(
-            (t) => t.type === "diagram" && t.connectionId === connection.id
+            (t) => t.type === "diagram" && t.connectionId === connection.id && t.databaseName === databaseName
           );
           if (existingTab) {
             return { activeTabId: existingTab.id, activeSidebarTab: "diagram" };
           }
 
+          const tabName = databaseName ? `ER: ${databaseName}` : `ER: ${connection.name}`;
           const newTab: EditorTab = {
             id,
-            name: `ER: ${connection.name}`,
+            name: tabName,
             type: "diagram",
             content: "",
             connectionId: connection.id,
+            databaseName: databaseName,
             diagramStyle: connection.style || "chen",
             diagramTheme: connection.theme || "default",
             diagramCurve: connection.curve || "basis",
