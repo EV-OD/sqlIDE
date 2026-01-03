@@ -7,6 +7,7 @@ import Sidebar from "../editor/Sidebar";
 import EditorTabBar from "../editor/EditorTabBar";
 import SqlEditor from "../editor/SqlEditor";
 import ResultsPanel from "../editor/ResultsPanel";
+import EmbeddedErDiagram from "../editor/EmbeddedErDiagram";
 import { ResizablePanels } from "../ui/ResizablePanels";
 
 export default function EditorPage() {
@@ -108,6 +109,7 @@ export default function EditorPage() {
         const fileName = result.path.split("/").pop() || result.path.split("\\").pop() || "query.sql";
         addEditorTab({
           name: fileName,
+          type: "sql",
           content: result.content,
           filePath: result.path,
           isDirty: false,
@@ -243,18 +245,29 @@ export default function EditorPage() {
           <Sidebar />
 
           {/* Editor Area */}
-          <ResizablePanels direction="vertical" defaultSize={60} minSize={20} maxSize={90}>
-            {/* SQL Editor */}
+          {activeTab?.type === "diagram" ? (
+            /* ER Diagram View */
             <div className="h-full flex flex-col">
               <EditorTabBar />
               <div className="flex-1 overflow-hidden">
-                <SqlEditor />
+                <EmbeddedErDiagram tab={activeTab} />
               </div>
             </div>
+          ) : (
+            /* SQL Editor View */
+            <ResizablePanels direction="vertical" defaultSize={60} minSize={20} maxSize={90}>
+              {/* SQL Editor */}
+              <div className="h-full flex flex-col">
+                <EditorTabBar />
+                <div className="flex-1 overflow-hidden">
+                  <SqlEditor />
+                </div>
+              </div>
 
-            {/* Results Panel */}
-            <ResultsPanel />
-          </ResizablePanels>
+              {/* Results Panel */}
+              <ResultsPanel />
+            </ResizablePanels>
+          )}
         </ResizablePanels>
       </div>
 

@@ -1,13 +1,21 @@
-import { X, FileText } from "lucide-react";
+import { X, FileText, GitBranch } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import clsx from "clsx";
 
 export default function EditorTabBar() {
-  const { editorTabs, activeTabId, setActiveTab, closeEditorTab } = useAppStore();
+  const { editorTabs, activeTabId, setActiveTab, closeEditorTab, setActiveSidebarTab } = useAppStore();
 
   if (editorTabs.length === 0) {
     return null;
   }
+
+  const handleTabClick = (tabId: string, tabType: "sql" | "diagram") => {
+    setActiveTab(tabId);
+    // Switch sidebar tab based on editor tab type
+    if (tabType === "diagram") {
+      setActiveSidebarTab("diagram");
+    }
+  };
 
   return (
     <div className="flex items-center bg-zinc-900 border-b border-zinc-800 overflow-x-auto">
@@ -20,9 +28,13 @@ export default function EditorTabBar() {
               ? "bg-zinc-800 text-white"
               : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
           )}
-          onClick={() => setActiveTab(tab.id)}
+          onClick={() => handleTabClick(tab.id, tab.type || "sql")}
         >
-          <FileText className="w-4 h-4 flex-shrink-0 text-blue-400" />
+          {tab.type === "diagram" ? (
+            <GitBranch className="w-4 h-4 flex-shrink-0 text-purple-400" />
+          ) : (
+            <FileText className="w-4 h-4 flex-shrink-0 text-blue-400" />
+          )}
           <span className="text-sm truncate max-w-[120px]">{tab.name}</span>
           {tab.isDirty && (
             <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />

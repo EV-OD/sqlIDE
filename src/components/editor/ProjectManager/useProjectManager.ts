@@ -69,6 +69,7 @@ export function useProjectManager() {
           // Open new tab
           addEditorTab({
             name: file.name,
+            type: "sql",
             content: file.content || "",
             fileId: file.id,
             isDirty: false,

@@ -1,4 +1,4 @@
-import { Database, FolderOpen, Plus, Settings, Zap } from "lucide-react";
+import { Database, FolderOpen, Plus, Settings, Zap, GitBranch } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 
 export default function WelcomePage() {
@@ -20,6 +20,11 @@ export default function WelcomePage() {
       title: "Smart Editor",
       description: "Monaco editor with SQL autocomplete and syntax highlighting",
     },
+    {
+      icon: GitBranch,
+      title: "ER Diagrams",
+      description: "Generate beautiful ER diagrams from your database schema",
+    },
   ];
 
   return (
@@ -36,13 +41,20 @@ export default function WelcomePage() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-4 mb-16">
+      <div className="flex flex-wrap gap-4 mb-16 justify-center">
         <button
           onClick={() => setCurrentPage("connection-manager")}
           className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-lg shadow-blue-600/25"
         >
           <Plus className="w-5 h-5" />
           New Connection
+        </button>
+        <button
+          onClick={() => setCurrentPage("er-generator")}
+          className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors shadow-lg shadow-purple-600/25"
+        >
+          <GitBranch className="w-5 h-5" />
+          ER Diagram Generator
         </button>
         {connections.length > 0 && (
           <button
@@ -56,7 +68,7 @@ export default function WelcomePage() {
       </div>
 
       {/* Features */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl w-full">
         {features.map((feature) => (
           <div
             key={feature.title}

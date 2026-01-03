@@ -116,11 +116,24 @@ export interface QueryResult {
 export interface EditorTab {
   id: string;
   name: string;
+  type: "sql" | "diagram";
   content: string;
   fileId?: string;
   filePath?: string;
   isDirty: boolean;
+  // For diagram tabs
+  connectionId?: string;
+  diagramStyle?: DiagramStyle;
+  diagramTheme?: string;
+  diagramCurve?: string;
+}
+
+// Diagram Settings
+export interface DiagramSettings {
+  style: DiagramStyle;
+  theme: string;
+  curve: string;
 }
 
 // App State
-export type AppPage = "welcome" | "connection-manager" | "editor";
+export type AppPage = "welcome" | "connection-manager" | "editor" | "er-generator";

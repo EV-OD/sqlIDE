@@ -1,7 +1,8 @@
-import { Database, FolderOpen } from "lucide-react";
+import { Database, FolderOpen, GitBranch } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import DatabaseExplorer from "./DatabaseExplorer";
 import ProjectManager from "./ProjectManager";
+import DiagramSettings from "./DiagramSettings";
 import clsx from "clsx";
 
 export default function Sidebar() {
@@ -10,6 +11,7 @@ export default function Sidebar() {
   const tabs = [
     { id: "database" as const, label: "Database", icon: Database },
     { id: "project" as const, label: "Projects", icon: FolderOpen },
+    { id: "diagram" as const, label: "Diagram", icon: GitBranch },
   ];
 
   return (
@@ -37,8 +39,10 @@ export default function Sidebar() {
       <div className="flex-1 overflow-hidden">
         {activeSidebarTab === "database" ? (
           <DatabaseExplorer />
-        ) : (
+        ) : activeSidebarTab === "project" ? (
           <ProjectManager />
+        ) : (
+          <DiagramSettings />
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Database,
   Table,
@@ -8,10 +8,51 @@ import {
   Type,
   RefreshCw,
   AlertCircle,
+  GitBranch,
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { getDatabases } from "../../services/database";
 import type { DatabaseInfo, DatabaseTable, DatabaseColumn } from "../../types";
+
+interface ContextMenuProps {
+  x: number;
+  y: number;
+  onClose: () => void;
+  onOpenErDiagram: () => void;
+}
+
+function ContextMenu({ x, y, onClose, onOpenErDiagram }: ContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed bg-zinc-800 border border-zinc-700 rounded-md shadow-lg py-1 z-50 min-w-[160px]"
+      style={{ left: x, top: y }}
+    >
+      <button
+        onClick={() => {
+          onOpenErDiagram();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 transition-colors"
+      >
+        <GitBranch className="w-4 h-4 text-purple-400" />
+        Open ER Diagram
+      </button>
+    </div>
+  );
+}
 
 interface TreeNodeProps {
   nodeId: string;
@@ -150,9 +191,10 @@ function DatabaseNode({ database, level }: DatabaseNodeProps) {
 }
 
 export default function DatabaseExplorer() {
-  const { activeConnection, databases, setDatabases } = useAppStore();
+  const { activeConnection, databases, setDatabases, openErDiagram } = useAppStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Fetch databases when connection changes
   useEffect(() => {
@@ -182,8 +224,19 @@ export default function DatabaseExplorer() {
     fetchDatabases();
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleOpenErDiagram = () => {
+    if (activeConnection) {
+      openErDiagram(activeConnection);
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col" onContextMenu={handleContextMenu}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800">
         <div className="flex items-center gap-2 min-w-0">
@@ -246,6 +299,16 @@ export default function DatabaseExplorer() {
           ))
         )}
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && activeConnection && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onOpenErDiagram={handleOpenErDiagram}
+        />
+      )}
     </div>
   );
 }

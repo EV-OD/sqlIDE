@@ -8,6 +8,7 @@ import type {
   EditorTab,
   QueryResult,
   DatabaseInfo,
+  DiagramSettings,
 } from "../types";
 
 interface AppState {
@@ -55,8 +56,15 @@ interface AppState {
   setIsExecutingQuery: (isExecuting: boolean) => void;
 
   // Sidebar
-  activeSidebarTab: "database" | "project";
-  setActiveSidebarTab: (tab: "database" | "project") => void;
+  activeSidebarTab: "database" | "project" | "diagram";
+  setActiveSidebarTab: (tab: "database" | "project" | "diagram") => void;
+
+  // Diagram Settings (for active diagram tab)
+  diagramSettings: DiagramSettings;
+  setDiagramSettings: (settings: Partial<DiagramSettings>) => void;
+
+  // Open ER Diagram for a connection
+  openErDiagram: (connection: SavedConnection) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -273,6 +281,54 @@ export const useAppStore = create<AppState>()(
       // Sidebar
       activeSidebarTab: "database",
       setActiveSidebarTab: (tab) => set({ activeSidebarTab: tab }),
+
+      // Diagram Settings
+      diagramSettings: {
+        style: "chen",
+        theme: "default",
+        curve: "basis",
+      },
+      setDiagramSettings: (settings) =>
+        set((state) => ({
+          diagramSettings: { ...state.diagramSettings, ...settings },
+        })),
+
+      // Open ER Diagram for a connection
+      openErDiagram: (connection) => {
+        const id = uuidv4();
+        set((state) => {
+          // Check if there's already a diagram tab for this connection
+          const existingTab = state.editorTabs.find(
+            (t) => t.type === "diagram" && t.connectionId === connection.id
+          );
+          if (existingTab) {
+            return { activeTabId: existingTab.id, activeSidebarTab: "diagram" };
+          }
+
+          const newTab: EditorTab = {
+            id,
+            name: `ER: ${connection.name}`,
+            type: "diagram",
+            content: "",
+            connectionId: connection.id,
+            diagramStyle: connection.style || "chen",
+            diagramTheme: connection.theme || "default",
+            diagramCurve: connection.curve || "basis",
+            isDirty: false,
+          };
+
+          return {
+            editorTabs: [...state.editorTabs, newTab],
+            activeTabId: id,
+            activeSidebarTab: "diagram",
+            diagramSettings: {
+              style: connection.style || "chen",
+              theme: connection.theme || "default",
+              curve: connection.curve || "basis",
+            },
+          };
+        });
+      },
     }),
     {
       name: "er-maker-storage",

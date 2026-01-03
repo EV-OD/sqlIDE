@@ -1,15 +1,18 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { Database, Code, Loader2, Play, Server, Save, Trash2, List, Plug } from "lucide-react";
+import { Database, Code, Loader2, Play, Server, Save, Trash2, List, Plug, Link } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { invoke } from "@tauri-apps/api/core";
 import MermaidDiagram from "./MermaidDiagram";
 import { Modal } from "./ui/Modal";
+import { useAppStore } from "../store/useAppStore";
 import type { Tab, SavedConnection, DiagramStyle, GenerateRequest } from "../types";
 
+type ExtendedTab = Tab | "app-connections";
+
 export default function ErGenerator() {
-  const [activeTab, setActiveTab] = useState<Tab>("database");
+  const [activeTab, setActiveTab] = useState<ExtendedTab>("database");
   const [loading, setLoading] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [mermaidCode, setMermaidCode] = useState<string>("");
@@ -22,6 +25,9 @@ export default function ErGenerator() {
   const [diagramStyle, setDiagramStyle] = useState<DiagramStyle>("chen");
   const [theme, setTheme] = useState("default");
   const [curve, setCurve] = useState("basis");
+
+  // Get connections from app store
+  const { connections: appConnections } = useAppStore();
 
   const { register, handleSubmit, setValue, watch, getValues } = useForm({
     defaultValues: {
@@ -82,11 +88,17 @@ export default function ErGenerator() {
     }
 
     const values = getValues();
+    // Map form values to SavedConnection type
+    const dbTypeMap: Record<string, SavedConnection["dbType"]> = {
+      postgres: "postgresql",
+      mysql: "mysql",
+      mariadb: "mariadb",
+    };
     const newConnection: SavedConnection = {
       id: Date.now().toString(),
       name: newConnectionName.trim(),
-      dbType: values.dbType,
-      connectionMode: values.connectionMode,
+      dbType: dbTypeMap[values.dbType] || "postgresql",
+      connectionMode: values.connectionMode === "url" ? "string" : "params",
       connectionString: values.connectionString,
       host: values.host,
       port: values.port,
@@ -117,8 +129,17 @@ export default function ErGenerator() {
     const conn = savedConnections.find((c) => c.id === id);
     if (!conn) return;
 
-    setValue("dbType", conn.dbType);
-    setValue("connectionMode", conn.connectionMode);
+    // Map SavedConnection dbType back to form dbType
+    const dbTypeToForm: Record<string, string> = {
+      postgresql: "postgres",
+      mysql: "mysql",
+      mariadb: "mariadb",
+    };
+    const formDbType = dbTypeToForm[conn.dbType] || "postgres";
+    const formConnectionMode = conn.connectionMode === "string" ? "url" : "manual";
+
+    setValue("dbType", formDbType);
+    setValue("connectionMode", formConnectionMode);
     if (conn.connectionString) setValue("connectionString", conn.connectionString);
     if (conn.host) setValue("host", conn.host);
     if (conn.port) setValue("port", conn.port);
@@ -131,8 +152,8 @@ export default function ErGenerator() {
     setCurve(conn.curve || "basis");
 
     const lastUsed = {
-      dbType: conn.dbType,
-      connectionMode: conn.connectionMode,
+      dbType: formDbType,
+      connectionMode: formConnectionMode,
       connectionString: conn.connectionString,
       host: conn.host,
       port: conn.port,
@@ -152,6 +173,28 @@ export default function ErGenerator() {
     const updated = savedConnections.filter((c) => c.id !== id);
     setSavedConnections(updated);
     localStorage.setItem("er-maker-connections", JSON.stringify(updated));
+  };
+
+  // Load connection from app store (Connection Manager)
+  const loadAppConnection = (conn: SavedConnection) => {
+    // Map dbType from app connection format
+    let dbType = conn.dbType;
+    if (dbType === "postgresql") dbType = "postgres" as any;
+
+    setValue("dbType", dbType);
+    setValue("connectionMode", conn.connectionMode === "string" ? "url" : "manual");
+    if (conn.connectionString) setValue("connectionString", conn.connectionString);
+    if (conn.host) setValue("host", conn.host);
+    if (conn.port) setValue("port", conn.port);
+    if (conn.database) setValue("database", conn.database);
+    if (conn.user) setValue("user", conn.user);
+    if (conn.password) setValue("password", conn.password);
+    
+    setDiagramStyle(conn.style || "chen");
+    setTheme(conn.theme || "default");
+    setCurve(conn.curve || "basis");
+
+    setActiveTab("database");
   };
 
   const dbType = watch("dbType");
@@ -291,7 +334,7 @@ CREATE TABLE posts (
         {/* Input Section */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-            <div className="flex border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex flex-wrap border-b border-zinc-200 dark:border-zinc-800">
               <button
                 onClick={() => setActiveTab("database")}
                 className={twMerge(
@@ -314,7 +357,7 @@ CREATE TABLE posts (
                 )}
               >
                 <Code className="w-4 h-4" />
-                SQL Code
+                SQL
               </button>
               <button
                 onClick={() => setActiveTab("saved")}
@@ -328,10 +371,54 @@ CREATE TABLE posts (
                 <List className="w-4 h-4" />
                 Saved
               </button>
+              {appConnections.length > 0 && (
+                <button
+                  onClick={() => setActiveTab("app-connections")}
+                  className={twMerge(
+                    "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors",
+                    activeTab === "app-connections"
+                      ? "bg-zinc-50 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400"
+                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  )}
+                >
+                  <Link className="w-4 h-4" />
+                  App
+                </button>
+              )}
             </div>
 
             <div className="p-6">
-              {activeTab === "saved" ? (
+              {activeTab === "app-connections" ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                    Use connections from Connection Manager
+                  </p>
+                  <div className="space-y-3">
+                    {appConnections.map((conn) => (
+                      <div
+                        key={conn.id}
+                        className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50"
+                      >
+                        <div className="min-w-0">
+                          <h4 className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                            {conn.name}
+                          </h4>
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {conn.dbType} • {conn.host || "localhost"}:{conn.port || "5432"}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => loadAppConnection(conn)}
+                          className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-colors"
+                          title="Use Connection"
+                        >
+                          <Play className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : activeTab === "saved" ? (
                 <div className="space-y-4">
                   {savedConnections.length === 0 ? (
                     <div className="text-center py-8 text-zinc-500 dark:text-zinc-400">
@@ -350,7 +437,7 @@ CREATE TABLE posts (
                               {conn.name}
                             </h4>
                             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                              {conn.dbType} • {conn.connectionMode === "url" ? "URL" : "Manual"}
+                              {conn.dbType} • {conn.connectionMode === "string" ? "URL" : "Manual"}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
