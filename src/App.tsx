@@ -1,6 +1,6 @@
 import { useAppStore } from "./store/useAppStore";
 import WelcomePage from "./components/pages/WelcomePage";
-import ConnectionManagerPage from "./components/pages/ConnectionManagerPage";
+import ConnectionManagerPage from "./components/pages/ConnectionManager";
 import EditorPage from "./components/pages/EditorPage";
 
 function App() {
