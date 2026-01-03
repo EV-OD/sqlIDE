@@ -326,6 +326,7 @@ export const useAppStore = create<AppState>()(
               style: connection.style || "chen",
               theme: connection.theme || "default",
               curve: connection.curve || "basis",
+              background: "light",
             },
           };
         });
