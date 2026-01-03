@@ -1,9 +1,16 @@
-import ErGenerator from "./components/ErGenerator";
+import { useAppStore } from "./store/useAppStore";
+import WelcomePage from "./components/pages/WelcomePage";
+import ConnectionManagerPage from "./components/pages/ConnectionManagerPage";
+import EditorPage from "./components/pages/EditorPage";
 
 function App() {
+  const { currentPage } = useAppStore();
+
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <ErGenerator />
+    <div className="h-screen bg-zinc-950">
+      {currentPage === "welcome" && <WelcomePage />}
+      {currentPage === "connection-manager" && <ConnectionManagerPage />}
+      {currentPage === "editor" && <EditorPage />}
     </div>
   );
 }

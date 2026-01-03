@@ -16,26 +16,32 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #09090b;
+  color: #fafafa;
 }
 
-/* Custom scrollbar */
+/* Dark mode scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #18181b;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: #3f3f46;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: #52525b;
+}
+
+::-webkit-scrollbar-corner {
+  background: #18181b;
 }
 
 /* Animation for modal */
@@ -52,4 +58,44 @@ body {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* Resize handle styles */
+[data-panel-resize-handle-id] {
+  transition: background-color 0.15s ease;
+}
+
+[data-panel-resize-handle-id]:hover,
+[data-panel-resize-handle-id][data-resize-handle-active] {
+  background-color: #3b82f6 !important;
+}
+
+/* Monaco editor customizations */
+.monaco-editor {
+  padding-top: 8px;
+}
+
+.monaco-editor .margin {
+  background-color: #18181b !important;
+}
+
+.monaco-editor,
+.monaco-editor-background,
+.monaco-editor .inputarea.ime-input {
+  background-color: #18181b !important;
+}
+
+/* Tree view hover effects */
+.tree-node:hover {
+  background-color: rgba(63, 63, 70, 0.5);
+}
+
+/* Custom focus styles */
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline: none;
+  ring: 2px;
+  ring-color: #3b82f6;
 }

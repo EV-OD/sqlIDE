@@ -4,7 +4,7 @@ use sqlparser::dialect::{GenericDialect, MySqlDialect, PostgreSqlDialect};
 use sqlparser::parser::Parser;
 use sqlx::mysql::MySqlPoolOptions;
 use sqlx::postgres::PgPoolOptions;
-use sqlx::Row;
+use sqlx::{Column as _, Row};
 
 // Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -551,6 +551,87 @@ fn generate_mermaid_code(
     format!("{}{}", init_directive, diagram_code)
 }
 
+// SQL Editor Types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseInfo {
+    pub name: String,
+    pub tables: Vec<TableInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableInfo {
+    pub name: String,
+    pub schema: Option<String>,
+    pub columns: Vec<ColumnInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColumnInfo {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub column_type: String,
+    pub nullable: bool,
+    #[serde(rename = "isPrimaryKey")]
+    pub is_primary_key: bool,
+    #[serde(rename = "isForeignKey")]
+    pub is_foreign_key: bool,
+    #[serde(rename = "defaultValue")]
+    pub default_value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryResult {
+    pub columns: Vec<String>,
+    pub rows: Vec<serde_json::Value>,
+    #[serde(rename = "rowCount")]
+    pub row_count: usize,
+    #[serde(rename = "executionTime")]
+    pub execution_time: u64,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionParams {
+    #[serde(rename = "dbType")]
+    pub db_type: String,
+    pub host: Option<String>,
+    pub port: Option<String>,
+    pub database: Option<String>,
+    pub user: Option<String>,
+    pub password: Option<String>,
+    #[serde(rename = "connectionString")]
+    pub connection_string: Option<String>,
+}
+
+fn build_connection_string(params: &ConnectionParams) -> String {
+    if let Some(conn_str) = &params.connection_string {
+        if !conn_str.is_empty() {
+            return conn_str.clone();
+        }
+    }
+    
+    let host = params.host.as_deref().unwrap_or("localhost");
+    let port = params.port.as_deref().unwrap_or(match params.db_type.as_str() {
+        "postgresql" | "postgres" => "5432",
+        "mysql" | "mariadb" => "3306",
+        "mssql" => "1433",
+        _ => "5432",
+    });
+    let database = params.database.as_deref().unwrap_or("");
+    let user = params.user.as_deref().unwrap_or("");
+    let password = params.password.as_deref().unwrap_or("");
+    
+    match params.db_type.as_str() {
+        "postgresql" | "postgres" => {
+            format!("postgres://{}:{}@{}:{}/{}", user, password, host, port, database)
+        }
+        "mysql" | "mariadb" => {
+            format!("mysql://{}:{}@{}:{}/{}", user, password, host, port, database)
+        }
+        _ => String::new(),
+    }
+}
+
 // Tauri Commands
 #[tauri::command]
 async fn generate_diagram(request: GenerateRequest) -> Result<GenerateResponse, String> {
@@ -612,18 +693,513 @@ async fn test_connection(db_type: String, connection_string: String) -> Result<S
 }
 
 #[tauri::command]
+async fn test_connection_params(params: ConnectionParams) -> Result<String, String> {
+    let connection_string = build_connection_string(&params);
+    let db_type = params.db_type.as_str();
+    
+    match db_type {
+        "postgresql" | "postgres" => {
+            let pool = PgPoolOptions::new()
+                .max_connections(1)
+                .acquire_timeout(std::time::Duration::from_secs(5))
+                .connect(&connection_string)
+                .await
+                .map_err(|e| format!("Connection failed: {}", e))?;
+            pool.close().await;
+            Ok("Connection successful!".to_string())
+        }
+        "mysql" | "mariadb" => {
+            let pool = MySqlPoolOptions::new()
+                .max_connections(1)
+                .acquire_timeout(std::time::Duration::from_secs(5))
+                .connect(&connection_string)
+                .await
+                .map_err(|e| format!("Connection failed: {}", e))?;
+            pool.close().await;
+            Ok("Connection successful!".to_string())
+        }
+        _ => Err(format!("Unsupported database type: {}", db_type)),
+    }
+}
+
+#[tauri::command]
+async fn get_databases(params: ConnectionParams) -> Result<Vec<DatabaseInfo>, String> {
+    let connection_string = build_connection_string(&params);
+    let db_type = params.db_type.as_str();
+    
+    match db_type {
+        "postgresql" | "postgres" => {
+            let pool = PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&connection_string)
+                .await
+                .map_err(|e| format!("Connection failed: {}", e))?;
+            
+            // Get tables from public schema
+            let tables_query = r#"
+                SELECT 
+                    t.table_name,
+                    t.table_schema
+                FROM information_schema.tables t
+                WHERE t.table_schema = 'public'
+                AND t.table_type = 'BASE TABLE'
+                ORDER BY t.table_name
+            "#;
+            
+            let table_rows = sqlx::query(tables_query)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| format!("Failed to fetch tables: {}", e))?;
+            
+            let mut tables = Vec::new();
+            
+            for table_row in table_rows {
+                let table_name: String = table_row.get("table_name");
+                let schema_name: String = table_row.get("table_schema");
+                
+                // Get columns for this table
+                let columns_query = r#"
+                    SELECT 
+                        c.column_name,
+                        c.data_type,
+                        c.is_nullable,
+                        c.column_default,
+                        CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END as is_primary_key,
+                        CASE WHEN fk.column_name IS NOT NULL THEN true ELSE false END as is_foreign_key
+                    FROM information_schema.columns c
+                    LEFT JOIN (
+                        SELECT kcu.column_name, kcu.table_name
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu 
+                            ON tc.constraint_name = kcu.constraint_name
+                        WHERE tc.constraint_type = 'PRIMARY KEY'
+                    ) pk ON pk.column_name = c.column_name AND pk.table_name = c.table_name
+                    LEFT JOIN (
+                        SELECT kcu.column_name, kcu.table_name
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu 
+                            ON tc.constraint_name = kcu.constraint_name
+                        WHERE tc.constraint_type = 'FOREIGN KEY'
+                    ) fk ON fk.column_name = c.column_name AND fk.table_name = c.table_name
+                    WHERE c.table_name = $1 AND c.table_schema = $2
+                    ORDER BY c.ordinal_position
+                "#;
+                
+                let column_rows = sqlx::query(columns_query)
+                    .bind(&table_name)
+                    .bind(&schema_name)
+                    .fetch_all(&pool)
+                    .await
+                    .map_err(|e| format!("Failed to fetch columns: {}", e))?;
+                
+                let columns: Vec<ColumnInfo> = column_rows
+                    .iter()
+                    .map(|row| {
+                        ColumnInfo {
+                            name: row.get("column_name"),
+                            column_type: row.get("data_type"),
+                            nullable: row.get::<String, _>("is_nullable") == "YES",
+                            is_primary_key: row.get("is_primary_key"),
+                            is_foreign_key: row.get("is_foreign_key"),
+                            default_value: row.get("column_default"),
+                        }
+                    })
+                    .collect();
+                
+                tables.push(TableInfo {
+                    name: table_name,
+                    schema: Some(schema_name),
+                    columns,
+                });
+            }
+            
+            pool.close().await;
+            
+            Ok(vec![DatabaseInfo {
+                name: "public".to_string(),
+                tables,
+            }])
+        }
+        "mysql" | "mariadb" => {
+            let pool = MySqlPoolOptions::new()
+                .max_connections(1)
+                .connect(&connection_string)
+                .await
+                .map_err(|e| format!("Connection failed: {}", e))?;
+            
+            let db_name = params.database.as_deref().unwrap_or("");
+            
+            // Get tables
+            let tables_query = r#"
+                SELECT TABLE_NAME
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = ?
+                AND TABLE_TYPE = 'BASE TABLE'
+                ORDER BY TABLE_NAME
+            "#;
+            
+            let table_rows = sqlx::query(tables_query)
+                .bind(db_name)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| format!("Failed to fetch tables: {}", e))?;
+            
+            let mut tables = Vec::new();
+            
+            for table_row in table_rows {
+                let table_name: String = table_row.get("TABLE_NAME");
+                
+                // Get columns for this table
+                let columns_query = r#"
+                    SELECT 
+                        COLUMN_NAME,
+                        DATA_TYPE,
+                        IS_NULLABLE,
+                        COLUMN_DEFAULT,
+                        COLUMN_KEY
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+                    ORDER BY ORDINAL_POSITION
+                "#;
+                
+                let column_rows = sqlx::query(columns_query)
+                    .bind(db_name)
+                    .bind(&table_name)
+                    .fetch_all(&pool)
+                    .await
+                    .map_err(|e| format!("Failed to fetch columns: {}", e))?;
+                
+                let columns: Vec<ColumnInfo> = column_rows
+                    .iter()
+                    .map(|row| {
+                        let column_key: String = row.get("COLUMN_KEY");
+                        ColumnInfo {
+                            name: row.get("COLUMN_NAME"),
+                            column_type: row.get("DATA_TYPE"),
+                            nullable: row.get::<String, _>("IS_NULLABLE") == "YES",
+                            is_primary_key: column_key == "PRI",
+                            is_foreign_key: column_key == "MUL",
+                            default_value: row.get("COLUMN_DEFAULT"),
+                        }
+                    })
+                    .collect();
+                
+                tables.push(TableInfo {
+                    name: table_name,
+                    schema: Some(db_name.to_string()),
+                    columns,
+                });
+            }
+            
+            pool.close().await;
+            
+            Ok(vec![DatabaseInfo {
+                name: db_name.to_string(),
+                tables,
+            }])
+        }
+        _ => Err(format!("Unsupported database type: {}", db_type)),
+    }
+}
+
+#[tauri::command]
+async fn execute_query(params: ConnectionParams, query: String) -> Result<QueryResult, String> {
+    let connection_string = build_connection_string(&params);
+    let db_type = params.db_type.as_str();
+    let start_time = std::time::Instant::now();
+    
+    match db_type {
+        "postgresql" | "postgres" => {
+            let pool = PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&connection_string)
+                .await
+                .map_err(|e| format!("Connection failed: {}", e))?;
+            
+            let rows = sqlx::query(&query)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| format!("Query failed: {}", e))?;
+            
+            let execution_time = start_time.elapsed().as_millis() as u64;
+            
+            if rows.is_empty() {
+                pool.close().await;
+                return Ok(QueryResult {
+                    columns: vec![],
+                    rows: vec![],
+                    row_count: 0,
+                    execution_time,
+                    error: None,
+                });
+            }
+            
+            let columns: Vec<String> = rows[0]
+                .columns()
+                .iter()
+                .map(|c| c.name().to_string())
+                .collect();
+            
+            let result_rows: Vec<serde_json::Value> = rows
+                .iter()
+                .map(|row| {
+                    let mut obj = serde_json::Map::new();
+                    for (i, col) in columns.iter().enumerate() {
+                        // Try different types in order of likelihood
+                        let value: serde_json::Value = if let Ok(v) = row.try_get::<i64, _>(i) {
+                            serde_json::Value::Number(v.into())
+                        } else if let Ok(v) = row.try_get::<i32, _>(i) {
+                            serde_json::Value::Number(v.into())
+                        } else if let Ok(v) = row.try_get::<f64, _>(i) {
+                            serde_json::json!(v)
+                        } else if let Ok(v) = row.try_get::<bool, _>(i) {
+                            serde_json::Value::Bool(v)
+                        } else if let Ok(v) = row.try_get::<String, _>(i) {
+                            serde_json::Value::String(v)
+                        } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
+                            v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
+                        } else if let Ok(v) = row.try_get::<Option<i32>, _>(i) {
+                            v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
+                        } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
+                            v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
+                        } else if let Ok(v) = row.try_get::<Option<bool>, _>(i) {
+                            v.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null)
+                        } else if let Ok(v) = row.try_get::<Option<String>, _>(i) {
+                            v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
+                        } else {
+                            serde_json::Value::Null
+                        };
+                        obj.insert(col.clone(), value);
+                    }
+                    serde_json::Value::Object(obj)
+                })
+                .collect();
+            
+            let row_count = result_rows.len();
+            pool.close().await;
+            
+            Ok(QueryResult {
+                columns,
+                rows: result_rows,
+                row_count,
+                execution_time,
+                error: None,
+            })
+        }
+        "mysql" | "mariadb" => {
+            let pool = MySqlPoolOptions::new()
+                .max_connections(1)
+                .connect(&connection_string)
+                .await
+                .map_err(|e| format!("Connection failed: {}", e))?;
+            
+            let rows = sqlx::query(&query)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| format!("Query failed: {}", e))?;
+            
+            let execution_time = start_time.elapsed().as_millis() as u64;
+            
+            if rows.is_empty() {
+                pool.close().await;
+                return Ok(QueryResult {
+                    columns: vec![],
+                    rows: vec![],
+                    row_count: 0,
+                    execution_time,
+                    error: None,
+                });
+            }
+            
+            let columns: Vec<String> = rows[0]
+                .columns()
+                .iter()
+                .map(|c| c.name().to_string())
+                .collect();
+            
+            let result_rows: Vec<serde_json::Value> = rows
+                .iter()
+                .map(|row| {
+                    let mut obj = serde_json::Map::new();
+                    for (i, col) in columns.iter().enumerate() {
+                        // Try different types in order of likelihood
+                        let value: serde_json::Value = if let Ok(v) = row.try_get::<i64, _>(i) {
+                            serde_json::Value::Number(v.into())
+                        } else if let Ok(v) = row.try_get::<i32, _>(i) {
+                            serde_json::Value::Number(v.into())
+                        } else if let Ok(v) = row.try_get::<f64, _>(i) {
+                            serde_json::json!(v)
+                        } else if let Ok(v) = row.try_get::<bool, _>(i) {
+                            serde_json::Value::Bool(v)
+                        } else if let Ok(v) = row.try_get::<String, _>(i) {
+                            serde_json::Value::String(v)
+                        } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
+                            v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
+                        } else if let Ok(v) = row.try_get::<Option<i32>, _>(i) {
+                            v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
+                        } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
+                            v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
+                        } else if let Ok(v) = row.try_get::<Option<bool>, _>(i) {
+                            v.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null)
+                        } else if let Ok(v) = row.try_get::<Option<String>, _>(i) {
+                            v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
+                        } else {
+                            serde_json::Value::Null
+                        };
+                        obj.insert(col.clone(), value);
+                    }
+                    serde_json::Value::Object(obj)
+                })
+                .collect();
+            
+            let row_count = result_rows.len();
+            pool.close().await;
+            
+            Ok(QueryResult {
+                columns,
+                rows: result_rows,
+                row_count,
+                execution_time,
+                error: None,
+            })
+        }
+        _ => Err(format!("Unsupported database type: {}", db_type)),
+    }
+}
+
+#[tauri::command]
 fn parse_sql(sql: String, dialect: String) -> Result<Schema, String> {
     parse_sql_to_schema(&sql, &dialect)
+}
+
+#[tauri::command]
+async fn save_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, &content).map_err(|e| format!("Failed to save file: {}", e))
+}
+
+#[tauri::command]
+async fn read_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))
+}
+
+#[tauri::command]
+async fn create_directory(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path).map_err(|e| format!("Failed to create directory: {}", e))
+}
+
+#[tauri::command]
+async fn delete_path(path: String) -> Result<(), String> {
+    let path_ref = std::path::Path::new(&path);
+    if path_ref.is_dir() {
+        std::fs::remove_dir_all(&path).map_err(|e| format!("Failed to delete directory: {}", e))
+    } else {
+        std::fs::remove_file(&path).map_err(|e| format!("Failed to delete file: {}", e))
+    }
+}
+
+#[tauri::command]
+async fn rename_path(old_path: String, new_path: String) -> Result<(), String> {
+    std::fs::rename(&old_path, &new_path).map_err(|e| format!("Failed to rename: {}", e))
+}
+
+#[tauri::command]
+async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
+    let mut entries = Vec::new();
+    let read_dir = std::fs::read_dir(&path).map_err(|e| format!("Failed to read directory: {}", e))?;
+    
+    for entry in read_dir {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let path = entry.path();
+        let name = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        let is_dir = path.is_dir();
+        
+        entries.push(FileEntry {
+            name,
+            path: path.to_string_lossy().to_string(),
+            is_directory: is_dir,
+        });
+    }
+    
+    Ok(entries)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileEntry {
+    pub name: String,
+    pub path: String,
+    #[serde(rename = "isDirectory")]
+    pub is_directory: bool,
+}
+
+#[tauri::command]
+async fn get_default_project_path() -> Result<String, String> {
+    let home = dirs::document_dir()
+        .or_else(|| dirs::home_dir())
+        .ok_or("Could not find home directory")?;
+    
+    let base_path = home.join("ERMaker");
+    Ok(base_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn get_next_project_folder(base_path: String) -> Result<String, String> {
+    let base = std::path::Path::new(&base_path);
+    
+    // Ensure base ERMaker directory exists
+    if !base.exists() {
+        std::fs::create_dir_all(&base).map_err(|e| format!("Failed to create base directory: {}", e))?;
+    }
+    
+    // Find the next available project number
+    let mut counter = 1;
+    loop {
+        let project_name = format!("Project{}", counter);
+        let project_path = base.join(&project_name);
+        
+        if !project_path.exists() {
+            // Create the directory
+            std::fs::create_dir_all(&project_path).map_err(|e| format!("Failed to create project directory: {}", e))?;
+            return Ok(project_path.to_string_lossy().to_string());
+        }
+        
+        counter += 1;
+        
+        // Safety limit
+        if counter > 1000 {
+            return Err("Too many projects".to_string());
+        }
+    }
+}
+
+#[tauri::command]
+async fn path_exists(path: String) -> bool {
+    std::path::Path::new(&path).exists()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             generate_diagram,
             test_connection,
-            parse_sql
+            test_connection_params,
+            get_databases,
+            execute_query,
+            parse_sql,
+            save_file,
+            read_file,
+            create_directory,
+            delete_path,
+            rename_path,
+            list_directory,
+            get_default_project_path,
+            get_next_project_folder,
+            path_exists
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
