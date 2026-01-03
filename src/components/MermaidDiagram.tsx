@@ -5,9 +5,16 @@ import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 interface MermaidDiagramProps {
   code: string;
+  background?: "light" | "dark" | "transparent";
 }
 
-export default function MermaidDiagram({ code }: MermaidDiagramProps) {
+const BACKGROUND_CLASSES = {
+  light: "bg-white",
+  dark: "bg-zinc-900",
+  transparent: "bg-transparent",
+};
+
+export default function MermaidDiagram({ code, background = "light" }: MermaidDiagramProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +66,7 @@ export default function MermaidDiagram({ code }: MermaidDiagramProps) {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-zinc-900 rounded-lg shadow-sm border border-zinc-700 overflow-hidden">
+    <div className={`relative w-full h-full flex flex-col ${BACKGROUND_CLASSES[background]} rounded-lg shadow-sm border border-zinc-700 overflow-hidden`}>
       <TransformWrapper
         initialScale={1}
         minScale={0.01}

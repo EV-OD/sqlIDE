@@ -126,6 +126,7 @@ export interface EditorTab {
   diagramStyle?: DiagramStyle;
   diagramTheme?: string;
   diagramCurve?: string;
+  diagramBackground?: string;
 }
 
 // Diagram Settings
@@ -133,6 +134,7 @@ export interface DiagramSettings {
   style: DiagramStyle;
   theme: string;
   curve: string;
+  background: string;
 }
 
 // App State

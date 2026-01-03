@@ -32,6 +32,12 @@ const CURVE_OPTIONS = [
   { value: "monotoneY", label: "Monotone Y" },
 ];
 
+const BACKGROUND_OPTIONS = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "transparent", label: "Transparent" },
+];
+
 type ExtendedTab = Tab | "app-connections";
 
 export default function ErGenerator() {
@@ -48,6 +54,7 @@ export default function ErGenerator() {
   const [diagramStyle, setDiagramStyle] = useState<DiagramStyle>("chen");
   const [theme, setTheme] = useState("default");
   const [curve, setCurve] = useState("basis");
+  const [background, setBackground] = useState<"light" | "dark" | "transparent">("light");
 
   // Get connections from app store
   const { connections: appConnections } = useAppStore();
@@ -708,6 +715,17 @@ CREATE TABLE posts (
                     )}
                   </div>
 
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-zinc-300 mb-1">
+                      Background
+                    </label>
+                    <CustomSelect
+                      value={background}
+                      onChange={(value) => setBackground(value as "light" | "dark" | "transparent")}
+                      options={BACKGROUND_OPTIONS}
+                    />
+                  </div>
+
                   <div className="flex gap-2">
                     <button
                       type="submit"
@@ -762,7 +780,7 @@ CREATE TABLE posts (
             </div>
             <div className="flex-1 p-6 bg-zinc-950/50 overflow-hidden flex flex-col">
               {mermaidCode ? (
-                <MermaidDiagram code={mermaidCode} />
+                <MermaidDiagram code={mermaidCode} background={background} />
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-zinc-400 space-y-4">
                   <Server className="w-12 h-12 opacity-20" />

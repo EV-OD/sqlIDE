@@ -287,6 +287,7 @@ export const useAppStore = create<AppState>()(
         style: "chen",
         theme: "default",
         curve: "basis",
+        background: "light",
       },
       setDiagramSettings: (settings) =>
         set((state) => ({

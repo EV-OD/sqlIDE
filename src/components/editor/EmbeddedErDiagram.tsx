@@ -22,6 +22,7 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
   const style = tab.diagramStyle || diagramSettings.style;
   const theme = tab.diagramTheme || diagramSettings.theme;
   const curve = tab.diagramCurve || diagramSettings.curve;
+  const background = tab.diagramBackground || diagramSettings.background;
 
   const buildConnectionString = (conn: SavedConnection): string => {
     if (conn.connectionMode === "string" && conn.connectionString) {
@@ -148,8 +149,8 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
             </button>
           </div>
         ) : mermaidCode ? (
-          <div className="h-full bg-white rounded-lg overflow-hidden">
-            <MermaidDiagram code={mermaidCode} />
+          <div className="h-full rounded-lg overflow-hidden">
+            <MermaidDiagram code={mermaidCode} background={background as "light" | "dark" | "transparent"} />
           </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-zinc-400">

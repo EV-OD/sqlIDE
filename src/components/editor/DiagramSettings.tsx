@@ -19,6 +19,12 @@ const CURVES = [
   { value: "monotoneY", label: "Monotone Y" },
 ];
 
+const BACKGROUNDS = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "transparent", label: "Transparent" },
+];
+
 const PRESETS = [
   { name: "Default", style: "chen" as DiagramStyle, theme: "default", curve: "basis" },
   { name: "Dark Mode", style: "chen" as DiagramStyle, theme: "dark", curve: "basis" },
@@ -50,6 +56,13 @@ export default function DiagramSettings() {
     setDiagramSettings({ curve });
     if (activeTab && isDiagramTab) {
       updateEditorTab(activeTab.id, { diagramCurve: curve, isDirty: true });
+    }
+  };
+
+  const handleBackgroundChange = (background: string) => {
+    setDiagramSettings({ background });
+    if (activeTab && isDiagramTab) {
+      updateEditorTab(activeTab.id, { diagramBackground: background, isDirty: true });
     }
   };
 
@@ -148,6 +161,18 @@ export default function DiagramSettings() {
                 />
               </div>
             )}
+
+            {/* Background */}
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wide">
+                Background
+              </label>
+              <CustomSelect
+                value={diagramSettings.background}
+                onChange={handleBackgroundChange}
+                options={BACKGROUNDS}
+              />
+            </div>
 
             {/* Presets */}
             <div>
