@@ -263,6 +263,16 @@ pub async fn test_mysql_connection(connection_string: &str) -> Result<String, St
 }
 
 pub async fn get_postgres_databases(connection_string: &str) -> Result<Vec<DatabaseInfo>, String> {
+    // Check if a specific database is in the connection string
+    let url = url::Url::parse(connection_string)
+        .map_err(|e| format!("Invalid connection string: {}", e))?;
+    let specified_db = url.path().trim_start_matches('/').to_string();
+    
+    // If no database specified or it's empty, list all databases
+    if specified_db.is_empty() {
+        return get_postgres_all_databases(connection_string).await;
+    }
+    
     let pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(connection_string)
@@ -353,7 +363,138 @@ pub async fn get_postgres_databases(connection_string: &str) -> Result<Vec<Datab
     }])
 }
 
+// Get all databases from PostgreSQL server (when no specific database is provided)
+async fn get_postgres_all_databases(connection_string: &str) -> Result<Vec<DatabaseInfo>, String> {
+    // Connect to the default 'postgres' database to list all databases
+    let base_url = connection_string.trim_end_matches('/');
+    let postgres_url = format!("{}/postgres", base_url);
+    
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&postgres_url)
+        .await
+        .map_err(|e| format!("Connection failed: {}", e))?;
+    
+    // Get list of user databases (exclude system databases)
+    let db_rows = sqlx::query(
+        r#"
+        SELECT datname 
+        FROM pg_database 
+        WHERE datistemplate = false 
+        AND datname NOT IN ('postgres')
+        ORDER BY datname
+        "#
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| format!("Failed to list databases: {}", e))?;
+    
+    pool.close().await;
+    
+    let mut databases = Vec::new();
+    
+    for db_row in db_rows {
+        let db_name: String = db_row.get("datname");
+        
+        // Connect to each database to get its tables
+        let db_url = format!("{}/{}", base_url, db_name);
+        
+        if let Ok(db_pool) = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&db_url)
+            .await
+        {
+            let tables_query = r#"
+                SELECT 
+                    t.table_name,
+                    t.table_schema
+                FROM information_schema.tables t
+                WHERE t.table_schema = 'public'
+                AND t.table_type = 'BASE TABLE'
+                ORDER BY t.table_name
+            "#;
+            
+            if let Ok(table_rows) = sqlx::query(tables_query).fetch_all(&db_pool).await {
+                let mut tables = Vec::new();
+                
+                for table_row in table_rows {
+                    let table_name: String = table_row.get("table_name");
+                    let schema_name: String = table_row.get("table_schema");
+                    
+                    let columns_query = r#"
+                        SELECT 
+                            c.column_name,
+                            c.data_type,
+                            c.is_nullable,
+                            c.column_default,
+                            CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END as is_primary_key,
+                            CASE WHEN fk.column_name IS NOT NULL THEN true ELSE false END as is_foreign_key
+                        FROM information_schema.columns c
+                        LEFT JOIN (
+                            SELECT kcu.column_name, kcu.table_name
+                            FROM information_schema.table_constraints tc
+                            JOIN information_schema.key_column_usage kcu 
+                                ON tc.constraint_name = kcu.constraint_name
+                            WHERE tc.constraint_type = 'PRIMARY KEY'
+                        ) pk ON pk.column_name = c.column_name AND pk.table_name = c.table_name
+                        LEFT JOIN (
+                            SELECT kcu.column_name, kcu.table_name
+                            FROM information_schema.table_constraints tc
+                            JOIN information_schema.key_column_usage kcu 
+                                ON tc.constraint_name = kcu.constraint_name
+                            WHERE tc.constraint_type = 'FOREIGN KEY'
+                        ) fk ON fk.column_name = c.column_name AND fk.table_name = c.table_name
+                        WHERE c.table_name = $1 AND c.table_schema = $2
+                        ORDER BY c.ordinal_position
+                    "#;
+                    
+                    if let Ok(column_rows) = sqlx::query(columns_query)
+                        .bind(&table_name)
+                        .bind(&schema_name)
+                        .fetch_all(&db_pool)
+                        .await
+                    {
+                        let columns: Vec<ColumnInfo> = column_rows
+                            .iter()
+                            .map(|row| {
+                                ColumnInfo {
+                                    name: row.get("column_name"),
+                                    column_type: row.get("data_type"),
+                                    nullable: row.get::<String, _>("is_nullable") == "YES",
+                                    is_primary_key: row.get("is_primary_key"),
+                                    is_foreign_key: row.get("is_foreign_key"),
+                                    default_value: row.get("column_default"),
+                                }
+                            })
+                            .collect();
+                        
+                        tables.push(TableInfo {
+                            name: table_name,
+                            schema: Some(schema_name),
+                            columns,
+                        });
+                    }
+                }
+                
+                databases.push(DatabaseInfo {
+                    name: db_name,
+                    tables,
+                });
+            }
+            
+            db_pool.close().await;
+        }
+    }
+    
+    Ok(databases)
+}
+
 pub async fn get_mysql_databases(connection_string: &str, db_name: &str) -> Result<Vec<DatabaseInfo>, String> {
+    // If no database specified, list all databases
+    if db_name.is_empty() {
+        return get_mysql_all_databases(connection_string).await;
+    }
+    
     let pool = MySqlPoolOptions::new()
         .max_connections(1)
         .connect(connection_string)
@@ -426,6 +567,103 @@ pub async fn get_mysql_databases(connection_string: &str, db_name: &str) -> Resu
         name: db_name.to_string(),
         tables,
     }])
+}
+
+// Get all databases from MySQL server (when no specific database is provided)
+async fn get_mysql_all_databases(connection_string: &str) -> Result<Vec<DatabaseInfo>, String> {
+    let pool = MySqlPoolOptions::new()
+        .max_connections(1)
+        .connect(connection_string)
+        .await
+        .map_err(|e| format!("Connection failed: {}", e))?;
+    
+    // Get list of user databases (exclude system databases)
+    let db_rows = sqlx::query(
+        r#"
+        SELECT SCHEMA_NAME 
+        FROM information_schema.SCHEMATA 
+        WHERE SCHEMA_NAME NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')
+        ORDER BY SCHEMA_NAME
+        "#
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| format!("Failed to list databases: {}", e))?;
+    
+    let mut databases = Vec::new();
+    
+    for db_row in db_rows {
+        let db_name: String = db_row.get("SCHEMA_NAME");
+        
+        let tables_query = r#"
+            SELECT TABLE_NAME
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = ?
+            AND TABLE_TYPE = 'BASE TABLE'
+            ORDER BY TABLE_NAME
+        "#;
+        
+        if let Ok(table_rows) = sqlx::query(tables_query)
+            .bind(&db_name)
+            .fetch_all(&pool)
+            .await
+        {
+            let mut tables = Vec::new();
+            
+            for table_row in table_rows {
+                let table_name: String = table_row.get("TABLE_NAME");
+                
+                let columns_query = r#"
+                    SELECT 
+                        COLUMN_NAME,
+                        DATA_TYPE,
+                        IS_NULLABLE,
+                        COLUMN_DEFAULT,
+                        COLUMN_KEY
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+                    ORDER BY ORDINAL_POSITION
+                "#;
+                
+                if let Ok(column_rows) = sqlx::query(columns_query)
+                    .bind(&db_name)
+                    .bind(&table_name)
+                    .fetch_all(&pool)
+                    .await
+                {
+                    let columns: Vec<ColumnInfo> = column_rows
+                        .iter()
+                        .map(|row| {
+                            let column_key: String = row.get("COLUMN_KEY");
+                            ColumnInfo {
+                                name: row.get("COLUMN_NAME"),
+                                column_type: row.get("DATA_TYPE"),
+                                nullable: row.get::<String, _>("IS_NULLABLE") == "YES",
+                                is_primary_key: column_key == "PRI",
+                                is_foreign_key: column_key == "MUL",
+                                default_value: row.get("COLUMN_DEFAULT"),
+                            }
+                        })
+                        .collect();
+                    
+                    tables.push(TableInfo {
+                        name: table_name,
+                        schema: Some(db_name.clone()),
+                        columns,
+                    });
+                }
+            }
+            
+            databases.push(DatabaseInfo {
+                name: db_name,
+                tables,
+            });
+        }
+    }
+    
+    pool.close().await;
+    
+    Ok(databases)
 }
 
 pub async fn execute_postgres_query(connection_string: &str, query: &str) -> Result<QueryResult, String> {

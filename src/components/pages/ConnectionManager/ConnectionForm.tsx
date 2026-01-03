@@ -140,12 +140,16 @@ export function ConnectionForm({
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-2">
                 Database
+                <span className="text-zinc-500 font-normal ml-2">(optional)</span>
               </label>
               <input
                 {...register("database")}
                 className="w-full px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
-                placeholder="mydb"
+                placeholder="Leave empty to browse all databases"
               />
+              <p className="text-xs text-zinc-500 mt-1">
+                Leave empty to see all available databases
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-2">
