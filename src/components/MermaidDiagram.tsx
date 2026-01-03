@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
-import { Download, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { Download, ZoomIn, ZoomOut, RotateCcw, Image, FileImage } from "lucide-react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { save } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 
 interface MermaidDiagramProps {
   code: string;
@@ -12,6 +14,12 @@ const BACKGROUND_CLASSES = {
   light: "bg-white",
   dark: "bg-zinc-900",
   transparent: "bg-transparent",
+};
+
+const BACKGROUND_COLORS = {
+  light: "#ffffff",
+  dark: "#18181b",
+  transparent: "transparent",
 };
 
 export default function MermaidDiagram({ code, background = "light" }: MermaidDiagramProps) {
@@ -48,17 +56,67 @@ export default function MermaidDiagram({ code, background = "light" }: MermaidDi
     renderDiagram();
   }, [code]);
 
-  const handleDownload = () => {
-    if (!svg) return;
-    const blob = new Blob([svg], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "er-diagram.svg";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const [downloading, setDownloading] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+
+  const handleDownloadSvg = async () => {
+    if (!code) return;
+    
+    setDownloading(true);
+    setShowDownloadMenu(false);
+    
+    try {
+      const filePath = await save({
+        defaultPath: "er-diagram.svg",
+        filters: [
+          { name: "SVG Image", extensions: ["svg"] },
+        ],
+      });
+
+      if (filePath) {
+        const bgColor = BACKGROUND_COLORS[background];
+        await invoke("export_mermaid_diagram", {
+          mermaidCode: code,
+          outputPath: filePath,
+          background: bgColor,
+          theme: null,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to save SVG:", err);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleDownloadPng = async () => {
+    if (!code) return;
+    
+    setDownloading(true);
+    setShowDownloadMenu(false);
+    
+    try {
+      const filePath = await save({
+        defaultPath: "er-diagram.png",
+        filters: [
+          { name: "PNG Image", extensions: ["png"] },
+        ],
+      });
+
+      if (filePath) {
+        const bgColor = BACKGROUND_COLORS[background];
+        await invoke("export_mermaid_diagram", {
+          mermaidCode: code,
+          outputPath: filePath,
+          background: bgColor,
+          theme: null,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to save PNG:", err);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   if (error) {
@@ -100,13 +158,37 @@ export default function MermaidDiagram({ code, background = "light" }: MermaidDi
                   <RotateCcw className="w-4 h-4" />
                 </button>
               </div>
-              <button
-                onClick={handleDownload}
-                className="p-2 bg-zinc-800 text-zinc-300 rounded-md shadow-sm border border-zinc-700 hover:bg-zinc-700 transition-colors"
-                title="Download SVG"
-              >
-                <Download className="w-4 h-4" />
-              </button>
+              
+              {/* Download dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                  disabled={downloading}
+                  className="p-2 bg-zinc-800 text-zinc-300 rounded-md shadow-sm border border-zinc-700 hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                  title="Download"
+                >
+                  <Download className={`w-4 h-4 ${downloading ? "animate-pulse" : ""}`} />
+                </button>
+                
+                {showDownloadMenu && (
+                  <div className="absolute right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-md shadow-lg overflow-hidden z-20">
+                    <button
+                      onClick={handleDownloadSvg}
+                      className="flex items-center gap-2 w-full px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 transition-colors"
+                    >
+                      <FileImage className="w-4 h-4" />
+                      Download SVG
+                    </button>
+                    <button
+                      onClick={handleDownloadPng}
+                      className="flex items-center gap-2 w-full px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 transition-colors"
+                    >
+                      <Image className="w-4 h-4" />
+                      Download PNG
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <TransformComponent
               wrapperClass="w-full h-full min-h-[500px] overflow-hidden"

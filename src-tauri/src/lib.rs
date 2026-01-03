@@ -130,11 +130,61 @@ async fn path_exists(path: String) -> bool {
     files::path_exists(path).await
 }
 
+#[tauri::command]
+async fn export_mermaid_diagram(
+    mermaid_code: String,
+    output_path: String,
+    background: Option<String>,
+    theme: Option<String>,
+) -> Result<(), String> {
+    use std::process::Command;
+    use std::fs;
+    use std::env;
+    
+    // Create a temporary file for the mermaid code
+    let temp_dir = env::temp_dir();
+    let input_path = temp_dir.join("mermaid_temp.mmd");
+    
+    fs::write(&input_path, &mermaid_code)
+        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+    
+    // Build the mmdc command
+    let mut cmd = Command::new("npx");
+    cmd.arg("mmdc");
+    cmd.arg("-i").arg(&input_path);
+    cmd.arg("-o").arg(&output_path);
+    
+    // Add background color if specified
+    if let Some(bg) = background {
+        cmd.arg("-b").arg(bg);
+    }
+    
+    // Add theme if specified
+    if let Some(t) = theme {
+        cmd.arg("-t").arg(t);
+    }
+    
+    // Run the command
+    let output = cmd.output()
+        .map_err(|e| format!("Failed to execute mmdc: {}", e))?;
+    
+    // Clean up temp file
+    let _ = fs::remove_file(&input_path);
+    
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("mmdc failed: {}", stderr))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             generate_diagram,
             test_connection,
@@ -150,7 +200,8 @@ pub fn run() {
             list_directory,
             get_default_project_path,
             get_next_project_folder,
-            path_exists
+            path_exists,
+            export_mermaid_diagram
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
