@@ -6,8 +6,31 @@ import { twMerge } from "tailwind-merge";
 import { invoke } from "@tauri-apps/api/core";
 import MermaidDiagram from "./MermaidDiagram";
 import { Modal } from "./ui/Modal";
+import { CustomSelect } from "./ui/CustomSelect";
 import { useAppStore } from "../store/useAppStore";
 import type { Tab, SavedConnection, DiagramStyle, GenerateRequest } from "../types";
+
+const DB_TYPE_OPTIONS = [
+  { value: "postgres", label: "PostgreSQL" },
+  { value: "mysql", label: "MySQL" },
+  { value: "mariadb", label: "MariaDB" },
+];
+
+const THEME_OPTIONS = [
+  { value: "default", label: "Default" },
+  { value: "forest", label: "Forest" },
+  { value: "dark", label: "Dark" },
+  { value: "neutral", label: "Neutral" },
+  { value: "base", label: "Base" },
+];
+
+const CURVE_OPTIONS = [
+  { value: "basis", label: "Curved (Basis)" },
+  { value: "linear", label: "Straight (Linear)" },
+  { value: "step", label: "Stepped" },
+  { value: "monotoneX", label: "Monotone X" },
+  { value: "monotoneY", label: "Monotone Y" },
+];
 
 type ExtendedTab = Tab | "app-connections";
 
@@ -320,12 +343,13 @@ CREATE TABLE posts (
   };
 
   return (
+    <div>
     <div className="w-full max-w-6xl mx-auto p-6 space-y-8">
       <div className="text-center space-y-2">
-        <h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-4xl font-bold tracking-tight text-zinc-100">
           ER Diagram Generator
         </h1>
-        <p className="text-zinc-500 dark:text-zinc-400">
+        <p className="text-zinc-400">
           Generate Chen-style (Crow's Foot) ER diagrams from your database or SQL code.
         </p>
       </div>
@@ -333,15 +357,15 @@ CREATE TABLE posts (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Input Section */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-            <div className="flex flex-wrap border-b border-zinc-200 dark:border-zinc-800">
+          <div className="bg-zinc-900 rounded-xl shadow-sm border border-zinc-800 overflow-hidden">
+            <div className="flex flex-wrap border-b border-zinc-800">
               <button
                 onClick={() => setActiveTab("database")}
                 className={twMerge(
                   "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors",
                   activeTab === "database"
-                    ? "bg-zinc-50 dark:bg-zinc-800 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
-                    : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    ? "bg-zinc-800 text-blue-400 border-b-2 border-blue-400"
+                    : "text-zinc-400 hover:bg-zinc-800"
                 )}
               >
                 <Database className="w-4 h-4" />
@@ -352,8 +376,8 @@ CREATE TABLE posts (
                 className={twMerge(
                   "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors",
                   activeTab === "sql"
-                    ? "bg-zinc-50 dark:bg-zinc-800 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
-                    : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    ? "bg-zinc-800 text-blue-400 border-b-2 border-blue-400"
+                    : "text-zinc-400 hover:bg-zinc-800"
                 )}
               >
                 <Code className="w-4 h-4" />
@@ -364,8 +388,8 @@ CREATE TABLE posts (
                 className={twMerge(
                   "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors",
                   activeTab === "saved"
-                    ? "bg-zinc-50 dark:bg-zinc-800 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
-                    : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    ? "bg-zinc-800 text-blue-400 border-b-2 border-blue-400"
+                    : "text-zinc-400 hover:bg-zinc-800"
                 )}
               >
                 <List className="w-4 h-4" />
@@ -377,8 +401,8 @@ CREATE TABLE posts (
                   className={twMerge(
                     "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors",
                     activeTab === "app-connections"
-                      ? "bg-zinc-50 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400"
-                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                      ? "bg-zinc-800 text-purple-400 border-b-2 border-purple-400"
+                      : "text-zinc-400 hover:bg-zinc-800"
                   )}
                 >
                   <Link className="w-4 h-4" />
@@ -390,26 +414,26 @@ CREATE TABLE posts (
             <div className="p-6">
               {activeTab === "app-connections" ? (
                 <div className="space-y-4">
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                  <p className="text-sm text-zinc-400 mb-4">
                     Use connections from Connection Manager
                   </p>
                   <div className="space-y-3">
                     {appConnections.map((conn) => (
                       <div
                         key={conn.id}
-                        className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50"
+                        className="flex items-center justify-between p-3 rounded-lg border border-zinc-700 bg-zinc-800/50"
                       >
                         <div className="min-w-0">
-                          <h4 className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                          <h4 className="font-medium text-zinc-100 truncate">
                             {conn.name}
                           </h4>
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          <p className="text-xs text-zinc-400">
                             {conn.dbType} • {conn.host || "localhost"}:{conn.port || "5432"}
                           </p>
                         </div>
                         <button
                           onClick={() => loadAppConnection(conn)}
-                          className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-colors"
+                          className="p-2 text-purple-400 hover:bg-purple-900/20 rounded-md transition-colors"
                           title="Use Connection"
                         >
                           <Play className="w-4 h-4" />
@@ -421,7 +445,7 @@ CREATE TABLE posts (
               ) : activeTab === "saved" ? (
                 <div className="space-y-4">
                   {savedConnections.length === 0 ? (
-                    <div className="text-center py-8 text-zinc-500 dark:text-zinc-400">
+                    <div className="text-center py-8 text-zinc-400">
                       <p>No saved connections yet.</p>
                       <p className="text-xs mt-1">Save a connection from the Database tab.</p>
                     </div>
@@ -430,27 +454,27 @@ CREATE TABLE posts (
                       {savedConnections.map((conn) => (
                         <div
                           key={conn.id}
-                          className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50"
+                          className="flex items-center justify-between p-3 rounded-lg border border-zinc-700 bg-zinc-800/50"
                         >
                           <div className="min-w-0">
-                            <h4 className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                            <h4 className="font-medium text-zinc-100 truncate">
                               {conn.name}
                             </h4>
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            <p className="text-xs text-zinc-400">
                               {conn.dbType} • {conn.connectionMode === "string" ? "URL" : "Manual"}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => loadConnection(conn.id)}
-                              className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+                              className="p-2 text-blue-400 hover:bg-blue-900/20 rounded-md transition-colors"
                               title="Load Connection"
                             >
                               <Play className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => deleteConnection(conn.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                              className="p-2 text-red-400 hover:bg-red-900/20 rounded-md transition-colors"
                               title="Delete Connection"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -466,25 +490,22 @@ CREATE TABLE posts (
                   {activeTab === "database" ? (
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                        <label className="block text-sm font-medium text-zinc-300 mb-1">
                           Database Type
                         </label>
-                        <select
-                          {...register("dbType")}
-                          className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="postgres">PostgreSQL</option>
-                          <option value="mysql">MySQL</option>
-                          <option value="mariadb">MariaDB</option>
-                        </select>
+                        <CustomSelect
+                          value={watch("dbType")}
+                          onChange={(value) => setValue("dbType", value)}
+                          options={DB_TYPE_OPTIONS}
+                        />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                        <label className="block text-sm font-medium text-zinc-300 mb-2">
                           Connection Method
                         </label>
                         <div className="flex gap-4">
-                          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400 cursor-pointer">
+                          <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
                             <input
                               type="radio"
                               value="url"
@@ -493,7 +514,7 @@ CREATE TABLE posts (
                             />
                             Connection URL
                           </label>
-                          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400 cursor-pointer">
+                          <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
                             <input
                               type="radio"
                               value="manual"
@@ -507,13 +528,13 @@ CREATE TABLE posts (
 
                       {connectionMode === "url" ? (
                         <div>
-                          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                          <label className="block text-sm font-medium text-zinc-300 mb-1">
                             Connection String
                           </label>
                           <input
                             {...register("connectionString")}
                             placeholder={getPlaceholder()}
-                            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           <p className="text-xs text-zinc-500 mt-1">
                             Direct connection to your database.
@@ -523,56 +544,56 @@ CREATE TABLE posts (
                         <div className="space-y-3">
                           <div className="grid grid-cols-3 gap-3">
                             <div className="col-span-2">
-                              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                              <label className="block text-sm font-medium text-zinc-300 mb-1">
                                 Host
                               </label>
                               <input
                                 {...register("host")}
                                 placeholder="localhost"
-                                className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                              <label className="block text-sm font-medium text-zinc-300 mb-1">
                                 Port
                               </label>
                               <input
                                 {...register("port")}
                                 placeholder="5432"
-                                className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </div>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                            <label className="block text-sm font-medium text-zinc-300 mb-1">
                               Database Name
                             </label>
                             <input
                               {...register("database")}
                               placeholder="mydb"
-                              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                              <label className="block text-sm font-medium text-zinc-300 mb-1">
                                 User
                               </label>
                               <input
                                 {...register("user")}
                                 placeholder="postgres"
-                                className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                              <label className="block text-sm font-medium text-zinc-300 mb-1">
                                 Password
                               </label>
                               <input
                                 type="password"
                                 {...register("password")}
                                 placeholder="••••••"
-                                className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </div>
                           </div>
@@ -584,7 +605,7 @@ CREATE TABLE posts (
                         type="button"
                         onClick={testConnection}
                         disabled={testingConnection}
-                        className="w-full flex items-center justify-center gap-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-medium py-2 rounded-lg transition-colors disabled:opacity-50"
+                        className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium py-2 rounded-lg transition-colors disabled:opacity-50"
                       >
                         {testingConnection ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -598,8 +619,8 @@ CREATE TABLE posts (
                         <div className={clsx(
                           "p-2 text-sm rounded-md",
                           connectionStatus.startsWith("Error") || connectionStatus.startsWith("Connection failed")
-                            ? "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"
-                            : "bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400"
+                            ? "bg-red-900/20 text-red-400"
+                            : "bg-green-900/20 text-green-400"
                         )}>
                           {connectionStatus}
                         </div>
@@ -609,7 +630,7 @@ CREATE TABLE posts (
                     <div className="space-y-4">
                       <div>
                         <div className="flex justify-between items-center mb-1">
-                          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                          <label className="block text-sm font-medium text-zinc-300">
                             SQL DDL
                           </label>
                           <button
@@ -624,25 +645,25 @@ CREATE TABLE posts (
                           {...register("sql")}
                           rows={10}
                           placeholder="CREATE TABLE..."
-                          className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
                     </div>
                   )}
 
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                    <label className="block text-sm font-medium text-zinc-300 mb-2">
                       Diagram Style
                     </label>
-                    <div className="flex gap-4 p-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-lg w-fit">
+                    <div className="flex gap-4 p-1 bg-zinc-800/50 rounded-lg w-fit">
                       <button
                         type="button"
                         onClick={() => setDiagramStyle("crows_foot")}
                         className={clsx(
                           "px-3 py-1.5 text-sm font-medium rounded-md transition-all",
                           diagramStyle === "crows_foot"
-                            ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm"
-                            : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                            ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                            : "text-zinc-400 hover:text-zinc-200"
                         )}
                       >
                         Crow's Foot
@@ -653,8 +674,8 @@ CREATE TABLE posts (
                         className={clsx(
                           "px-3 py-1.5 text-sm font-medium rounded-md transition-all",
                           diagramStyle === "chen"
-                            ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm"
-                            : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                            ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                            : "text-zinc-400 hover:text-zinc-200"
                         )}
                       >
                         Chen's Notation
@@ -664,37 +685,25 @@ CREATE TABLE posts (
 
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                      <label className="block text-sm font-medium text-zinc-300 mb-1">
                         Theme
                       </label>
-                      <select
+                      <CustomSelect
                         value={theme}
-                        onChange={(e) => setTheme(e.target.value)}
-                        className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="default">Default</option>
-                        <option value="forest">Forest</option>
-                        <option value="dark">Dark</option>
-                        <option value="neutral">Neutral</option>
-                        <option value="base">Base</option>
-                      </select>
+                        onChange={setTheme}
+                        options={THEME_OPTIONS}
+                      />
                     </div>
                     {diagramStyle === "chen" && (
                       <div>
-                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                        <label className="block text-sm font-medium text-zinc-300 mb-1">
                           Line Style
                         </label>
-                        <select
+                        <CustomSelect
                           value={curve}
-                          onChange={(e) => setCurve(e.target.value)}
-                          className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="basis">Curved (Basis)</option>
-                          <option value="linear">Straight (Linear)</option>
-                          <option value="step">Stepped</option>
-                          <option value="monotoneX">Monotone X</option>
-                          <option value="monotoneY">Monotone Y</option>
-                        </select>
+                          onChange={setCurve}
+                          options={CURVE_OPTIONS}
+                        />
                       </div>
                     )}
                   </div>
@@ -716,7 +725,7 @@ CREATE TABLE posts (
                       <button
                         type="button"
                         onClick={openSaveModal}
-                        className="flex items-center justify-center gap-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium px-4 py-2.5 rounded-lg transition-colors border border-zinc-200 dark:border-zinc-700"
+                        className="flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-medium px-4 py-2.5 rounded-lg transition-colors border border-zinc-700"
                         title="Save Connection"
                       >
                         <Save className="w-4 h-4" />
@@ -725,7 +734,7 @@ CREATE TABLE posts (
                   </div>
 
                   {error && (
-                    <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                    <div className="p-3 text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-md">
                       {error}
                     </div>
                   )}
@@ -737,21 +746,21 @@ CREATE TABLE posts (
 
         {/* Output Section */}
         <div className="lg:col-span-2">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 h-full min-h-[500px] flex flex-col">
-            <div className="border-b border-zinc-200 dark:border-zinc-800 px-6 py-4 flex justify-between items-center">
-              <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">
+          <div className="bg-zinc-900 rounded-xl shadow-sm border border-zinc-800 h-full min-h-[500px] flex flex-col">
+            <div className="border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
+              <h2 className="font-semibold text-zinc-100">
                 Diagram Preview
               </h2>
               {mermaidCode && (
                 <button
                   onClick={() => navigator.clipboard.writeText(mermaidCode)}
-                  className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  className="text-xs text-zinc-500 hover:text-zinc-100"
                 >
                   Copy Mermaid Code
                 </button>
               )}
             </div>
-            <div className="flex-1 p-6 bg-zinc-50 dark:bg-zinc-950/50 overflow-hidden flex flex-col">
+            <div className="flex-1 p-6 bg-zinc-950/50 overflow-hidden flex flex-col">
               {mermaidCode ? (
                 <MermaidDiagram code={mermaidCode} />
               ) : (
@@ -772,14 +781,14 @@ CREATE TABLE posts (
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label className="block text-sm font-medium text-zinc-300 mb-1">
               Connection Name
             </label>
             <input
               value={newConnectionName}
               onChange={(e) => setNewConnectionName(e.target.value)}
               placeholder="e.g., Local Postgres"
-              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
             />
             {saveError && (
@@ -789,10 +798,10 @@ CREATE TABLE posts (
 
           {savedConnections.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
                 Or overwrite existing:
               </label>
-              <div className="max-h-40 overflow-y-auto space-y-1 border border-zinc-200 dark:border-zinc-700 rounded-md p-1">
+              <div className="max-h-40 overflow-y-auto space-y-1 border border-zinc-700 rounded-md p-1">
                 {savedConnections.map((conn) => (
                   <button
                     key={conn.id}
@@ -800,8 +809,8 @@ CREATE TABLE posts (
                     className={clsx(
                       "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
                       newConnectionName.trim().toLowerCase() === conn.name.toLowerCase()
-                        ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
-                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                        ? "bg-blue-900/20 text-blue-300"
+                        : "hover:bg-zinc-800 text-zinc-300"
                     )}
                   >
                     {conn.name}
@@ -814,7 +823,7 @@ CREATE TABLE posts (
           <div className="flex justify-end gap-2 pt-2">
             <button
               onClick={() => setIsSaveModalOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors"
+              className="px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 rounded-md transition-colors"
             >
               Cancel
             </button>
@@ -829,6 +838,7 @@ CREATE TABLE posts (
           </div>
         </div>
       </Modal>
+    </div>
     </div>
   );
 }

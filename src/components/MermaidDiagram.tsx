@@ -55,38 +55,39 @@ export default function MermaidDiagram({ code }: MermaidDiagramProps) {
   };
 
   if (error) {
-    return <div className="text-red-500 p-4 border border-red-300 rounded bg-red-50">{error}</div>;
+    return <div className="text-red-400 p-4 border border-red-800 rounded bg-red-900/20">{error}</div>;
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-white rounded-lg shadow-sm border border-zinc-200 overflow-hidden">
+    <div className="relative w-full h-full flex flex-col bg-zinc-900 rounded-lg shadow-sm border border-zinc-700 overflow-hidden">
       <TransformWrapper
         initialScale={1}
-        minScale={0.5}
-        maxScale={4}
+        minScale={0.01}
+        maxScale={100}
+        limitToBounds={false}
         centerOnInit
       >
         {({ zoomIn, zoomOut, resetTransform }) => (
           <>
             <div className="absolute top-2 right-2 z-10 flex gap-2">
-              <div className="flex bg-white dark:bg-zinc-800 rounded-md shadow-sm border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+              <div className="flex bg-zinc-800 rounded-md shadow-sm border border-zinc-700 overflow-hidden">
                 <button
                   onClick={() => zoomIn()}
-                  className="p-2 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors border-r border-zinc-200 dark:border-zinc-700"
+                  className="p-2 text-zinc-300 hover:bg-zinc-700 transition-colors border-r border-zinc-700"
                   title="Zoom In"
                 >
                   <ZoomIn className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => zoomOut()}
-                  className="p-2 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors border-r border-zinc-200 dark:border-zinc-700"
+                  className="p-2 text-zinc-300 hover:bg-zinc-700 transition-colors border-r border-zinc-700"
                   title="Zoom Out"
                 >
                   <ZoomOut className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => resetTransform()}
-                  className="p-2 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                  className="p-2 text-zinc-300 hover:bg-zinc-700 transition-colors"
                   title="Reset Zoom"
                 >
                   <RotateCcw className="w-4 h-4" />
@@ -94,7 +95,7 @@ export default function MermaidDiagram({ code }: MermaidDiagramProps) {
               </div>
               <button
                 onClick={handleDownload}
-                className="p-2 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-md shadow-sm border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                className="p-2 bg-zinc-800 text-zinc-300 rounded-md shadow-sm border border-zinc-700 hover:bg-zinc-700 transition-colors"
                 title="Download SVG"
               >
                 <Download className="w-4 h-4" />

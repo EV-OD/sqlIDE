@@ -31,15 +31,15 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div
         ref={ref}
-        className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-800 animate-in"
+        className="w-full max-w-md bg-zinc-900 rounded-xl shadow-xl border border-zinc-800 animate-in"
       >
-        <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
-          <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+          <h3 className="text-lg font-semibold text-zinc-100">
             {title}
           </h3>
           <button
             onClick={onClose}
-            className="p-1 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+            className="p-1 text-zinc-500 hover:text-zinc-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>

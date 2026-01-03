@@ -1,5 +1,6 @@
 import { GitBranch, Palette, Sparkles } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
+import { CustomSelect } from "../ui/CustomSelect";
 import type { DiagramStyle } from "../../types";
 
 const THEMES = [
@@ -127,17 +128,11 @@ export default function DiagramSettings() {
               <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wide">
                 Theme
               </label>
-              <select
+              <CustomSelect
                 value={diagramSettings.theme}
-                onChange={(e) => handleThemeChange(e.target.value)}
-                className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                {THEMES.map((theme) => (
-                  <option key={theme.value} value={theme.value}>
-                    {theme.label}
-                  </option>
-                ))}
-              </select>
+                onChange={handleThemeChange}
+                options={THEMES}
+              />
             </div>
 
             {/* Line Style (only for Chen) */}
@@ -146,17 +141,11 @@ export default function DiagramSettings() {
                 <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wide">
                   Line Style
                 </label>
-                <select
+                <CustomSelect
                   value={diagramSettings.curve}
-                  onChange={(e) => handleCurveChange(e.target.value)}
-                  className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  {CURVES.map((curve) => (
-                    <option key={curve.value} value={curve.value}>
-                      {curve.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={handleCurveChange}
+                  options={CURVES}
+                />
               </div>
             )}
 

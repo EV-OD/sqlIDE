@@ -1,6 +1,12 @@
 import { UseFormRegister, UseFormWatch, UseFormSetValue, FieldErrors } from "react-hook-form";
 import { Loader2, CheckCircle, AlertCircle, Database } from "lucide-react";
+import { CustomSelect } from "../../ui/CustomSelect";
 import { DB_TYPES, type ConnectionFormData, type TestResult } from "./types";
+
+const DB_TYPE_OPTIONS = DB_TYPES.map((db) => ({
+  value: db.value,
+  label: db.label,
+}));
 
 interface ConnectionFormProps {
   editingId: string | null;
@@ -61,20 +67,14 @@ export function ConnectionForm({
           <label className="block text-sm font-medium text-zinc-300 mb-2">
             Database Type
           </label>
-          <select
-            {...register("dbType")}
-            onChange={(e) => {
-              register("dbType").onChange(e);
-              handleDbTypeChange(e.target.value);
+          <CustomSelect
+            value={dbType}
+            onChange={(value) => {
+              setValue("dbType", value as ConnectionFormData["dbType"]);
+              handleDbTypeChange(value);
             }}
-            className="w-full px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-blue-500 [&>option]:bg-zinc-900 [&>option]:text-white"
-          >
-            {DB_TYPES.map((db) => (
-              <option key={db.value} value={db.value} className="bg-zinc-900 text-white">
-                {db.label}
-              </option>
-            ))}
-          </select>
+            options={DB_TYPE_OPTIONS}
+          />
         </div>
 
         {/* Connection Mode */}
