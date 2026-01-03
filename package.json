@@ -1,13 +1,37 @@
 {
-  "name": "er-maker-desktop",
+  "name": "er-maker",
+  "productName": "ER Maker",
+  "description": "Create ER diagrams from databases and SQL - A powerful desktop application for designing Entity-Relationship diagrams",
   "private": true,
   "version": "0.1.0",
+  "author": {
+    "name": "EV-OD",
+    "url": "https://github.com/EV-OD"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EV-OD/sqlIDE"
+  },
+  "license": "MIT",
+  "keywords": [
+    "er-diagram",
+    "database",
+    "sql",
+    "postgresql",
+    "mysql",
+    "mariadb",
+    "entity-relationship",
+    "diagram",
+    "tauri",
+    "desktop"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "generate-icons": "bash scripts/generate-icons.sh"
   },
   "dependencies": {
     "@mermaid-js/mermaid-cli": "^11.12.0",

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "er-maker-desktop",
+  "productName": "ER Maker",
   "version": "0.1.0",
-  "identifier": "com.rabin.er-maker-desktop",
+  "identifier": "com.evod.ermaker",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "er-maker-desktop",
-        "width": 800,
-        "height": 600
+        "title": "ER Maker - Database Diagram Designer",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "center": true
       }
     ],
     "security": {
@@ -30,6 +33,30 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "Create ER diagrams from databases and SQL",
+    "longDescription": "ER Maker is a powerful desktop application for creating Entity-Relationship diagrams. Connect to PostgreSQL, MySQL, or MariaDB databases to automatically generate ER diagrams, or write SQL to visualize your schema. Features include multiple diagram styles (Chen & Crow's Foot notation), SQL editor with syntax highlighting, and export to PNG/SVG.",
+    "copyright": "Copyright © 2026 EV-OD",
+    "publisher": "EV-OD",
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "deb": {
+        "depends": []
+      },
+      "rpm": {
+        "depends": []
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.13"
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
   }
 }
