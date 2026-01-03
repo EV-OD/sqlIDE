@@ -3,7 +3,7 @@ import mermaid from "mermaid";
 import { Download, ZoomIn, ZoomOut, RotateCcw, Image, FileImage } from "lucide-react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { save } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
+import { writeFile } from "@tauri-apps/plugin-fs";
 
 interface MermaidDiagramProps {
   code: string;
@@ -23,9 +23,28 @@ const BACKGROUND_COLORS = {
 };
 
 export default function MermaidDiagram({ code, background = "light" }: MermaidDiagramProps) {
-  const ref = useRef<HTMLDivElement>(null);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+
+  // Close download menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    };
+
+    if (showDownloadMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showDownloadMenu]);
 
   useEffect(() => {
     mermaid.initialize({
@@ -56,8 +75,67 @@ export default function MermaidDiagram({ code, background = "light" }: MermaidDi
     renderDiagram();
   }, [code]);
 
-  const [downloading, setDownloading] = useState(false);
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  // Generate export-ready SVG with proper dimensions and background
+  const generateExportSvg = async (): Promise<{ svg: string; width: number; height: number }> => {
+    const { svg: rawSvg } = await mermaid.render(`mermaid-export-${Date.now()}`, code);
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(rawSvg, "image/svg+xml");
+    const svgEl = doc.querySelector("svg");
+    
+    if (!svgEl) throw new Error("Failed to parse SVG");
+    
+    // Get dimensions from viewBox or attributes
+    let width = 800;
+    let height = 600;
+    
+    const viewBox = svgEl.getAttribute("viewBox");
+    if (viewBox) {
+      const parts = viewBox.split(" ").map(Number);
+      if (parts.length === 4) {
+        width = Math.ceil(parts[2]);
+        height = Math.ceil(parts[3]);
+      }
+    }
+    
+    // Also check width/height attributes
+    const attrWidth = svgEl.getAttribute("width");
+    const attrHeight = svgEl.getAttribute("height");
+    if (attrWidth && !attrWidth.includes("%")) {
+      width = Math.ceil(parseFloat(attrWidth));
+    }
+    if (attrHeight && !attrHeight.includes("%")) {
+      height = Math.ceil(parseFloat(attrHeight));
+    }
+    
+    // Set explicit dimensions for export
+    svgEl.setAttribute("width", String(width));
+    svgEl.setAttribute("height", String(height));
+    svgEl.removeAttribute("style");
+    
+    // Add background
+    const bgColor = BACKGROUND_COLORS[background];
+    if (bgColor !== "transparent") {
+      const bgRect = doc.createElementNS("http://www.w3.org/2000/svg", "rect");
+      bgRect.setAttribute("x", "0");
+      bgRect.setAttribute("y", "0");
+      bgRect.setAttribute("width", String(width));
+      bgRect.setAttribute("height", String(height));
+      bgRect.setAttribute("fill", bgColor);
+      svgEl.insertBefore(bgRect, svgEl.firstChild);
+    }
+    
+    // Add xmlns if missing
+    if (!svgEl.getAttribute("xmlns")) {
+      svgEl.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    }
+    
+    return {
+      svg: new XMLSerializer().serializeToString(svgEl),
+      width,
+      height,
+    };
+  };
 
   const handleDownloadSvg = async () => {
     if (!code) return;
@@ -74,13 +152,8 @@ export default function MermaidDiagram({ code, background = "light" }: MermaidDi
       });
 
       if (filePath) {
-        const bgColor = BACKGROUND_COLORS[background];
-        await invoke("export_mermaid_diagram", {
-          mermaidCode: code,
-          outputPath: filePath,
-          background: bgColor,
-          theme: null,
-        });
+        const { svg: exportSvg } = await generateExportSvg();
+        await writeFile(filePath, new TextEncoder().encode(exportSvg));
       }
     } catch (err) {
       console.error("Failed to save SVG:", err);
@@ -104,12 +177,58 @@ export default function MermaidDiagram({ code, background = "light" }: MermaidDi
       });
 
       if (filePath) {
-        const bgColor = BACKGROUND_COLORS[background];
-        await invoke("export_mermaid_diagram", {
-          mermaidCode: code,
-          outputPath: filePath,
-          background: bgColor,
-          theme: null,
+        const { svg: exportSvg, width, height } = await generateExportSvg();
+        const scale = 2; // High DPI
+        
+        // Convert SVG to base64 data URL to avoid CORS/tainted canvas issues
+        const svgBase64 = btoa(unescape(encodeURIComponent(exportSvg)));
+        const dataUrl = `data:image/svg+xml;base64,${svgBase64}`;
+        
+        // Create an image from the SVG
+        const img = new window.Image();
+        
+        await new Promise<void>((resolve, reject) => {
+          img.onload = async () => {
+            try {
+              const canvas = document.createElement("canvas");
+              canvas.width = width * scale;
+              canvas.height = height * scale;
+              
+              const ctx = canvas.getContext("2d");
+              if (!ctx) throw new Error("Failed to get canvas context");
+              
+              // Fill background first (for transparent SVGs)
+              const bgColor = BACKGROUND_COLORS[background];
+              if (bgColor !== "transparent") {
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+              }
+              
+              // Draw the SVG
+              ctx.scale(scale, scale);
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              // Convert to PNG
+              const pngDataUrl = canvas.toDataURL("image/png");
+              const base64Data = pngDataUrl.split(",")[1];
+              const binaryString = atob(base64Data);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              
+              await writeFile(filePath, bytes);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          };
+          
+          img.onerror = () => {
+            reject(new Error("Failed to load SVG as image"));
+          };
+          
+          img.src = dataUrl;
         });
       }
     } catch (err) {
@@ -160,7 +279,7 @@ export default function MermaidDiagram({ code, background = "light" }: MermaidDi
               </div>
               
               {/* Download dropdown */}
-              <div className="relative">
+              <div className="relative" ref={downloadMenuRef}>
                 <button
                   onClick={() => setShowDownloadMenu(!showDownloadMenu)}
                   disabled={downloading}
@@ -196,8 +315,7 @@ export default function MermaidDiagram({ code, background = "light" }: MermaidDi
               contentClass="w-full h-full flex items-center justify-center"
             >
               <div 
-                ref={ref} 
-                className="w-full h-full flex items-center justify-center"
+                className="w-full h-full flex items-center justify-center p-4"
                 dangerouslySetInnerHTML={{ __html: svg }}
               />
             </TransformComponent>
