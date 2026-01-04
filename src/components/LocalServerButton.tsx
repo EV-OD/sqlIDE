@@ -1,13 +1,16 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Database, Loader2, Play, Square, AlertCircle } from 'lucide-react';
+import { Database, Loader2, AlertCircle } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 
 const DEFAULT_PORT = 3307;
 const DEFAULT_HOST = '127.0.0.1';
 
 export default function LocalServerButton() {
-  const { addConnection, setActiveConnection, setCurrentPage, connections } = useAppStore();
+  // Subscribe selectively to avoid re-rendering on unrelated store changes
+  const addConnection = useAppStore((s) => s.addConnection);
+  const setActiveConnection = useAppStore((s) => s.setActiveConnection);
+  const connections = useAppStore((s) => s.connections);
   const [status, setStatus] = useState<string>('unknown');
   const [busy, setBusy] = useState(false);
   const [bundlePresent, setBundlePresent] = useState<boolean | null>(null);

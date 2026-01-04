@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../../store/useAppStore';
 import { ArrowLeft, Database, Download, Play, Square, RefreshCw, Terminal, Loader2 } from 'lucide-react';

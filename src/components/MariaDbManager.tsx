@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../store/useAppStore';
 import { InstallModal } from './ui/InstallModal';
@@ -7,7 +7,11 @@ const DEFAULT_PORT = 3307;
 const DEFAULT_HOST = '127.0.0.1';
 
 export default function MariaDbManager() {
-  const { connections, addConnection, setActiveConnection, setCurrentPage } = useAppStore();
+  // Select only the store fields we need to avoid re-renders on unrelated changes
+  const connections = useAppStore((s) => s.connections);
+  const addConnection = useAppStore((s) => s.addConnection);
+  const setActiveConnection = useAppStore((s) => s.setActiveConnection);
+  const setCurrentPage = useAppStore((s) => s.setCurrentPage);
   const [status, setStatus] = useState<string>('unknown');
   const [busy, setBusy] = useState(false);
   const [bundlePresent, setBundlePresent] = useState<boolean | null>(null);
