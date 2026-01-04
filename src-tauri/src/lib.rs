@@ -168,8 +168,9 @@ pub fn run() {
             // MariaDB offline manager commands
             mariadb_install,
             mariadb_bundle_exists,
+            mariadb_platform_supported,
             mariadb_start,
-                mariadb_read_log,
+            mariadb_read_log,
             mariadb_stop,
             mariadb_status
         ])
@@ -463,6 +464,14 @@ fn mariadb_bundle_exists(handle: AppHandle) -> Result<bool, String> {
         .resolve(&format!("bundled/mariadb/{}", platform), BaseDirectory::Resource)
         .map_err(|e| e.to_string())?;
     Ok(src.exists())
+}
+
+#[tauri::command]
+fn mariadb_platform_supported() -> Result<bool, String> {
+    // Only Linux x86_64 is supported for now
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    Ok(os == "linux" && arch == "x86_64")
 }
 
 #[tauri::command]

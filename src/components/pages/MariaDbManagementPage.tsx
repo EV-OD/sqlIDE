@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../../store/useAppStore';
 import { ArrowLeft, Database, Download, Play, Square, RefreshCw, Terminal, Loader2 } from 'lucide-react';
@@ -8,7 +8,12 @@ const DEFAULT_PORT = 3307;
 const DEFAULT_HOST = '127.0.0.1';
 
 export default function MariaDbManagementPage() {
-  const { setCurrentPage, addConnection, setActiveConnection, connections } = useAppStore();
+  // Use selective subscriptions to prevent unnecessary re-renders from unrelated store changes
+  const setCurrentPage = useAppStore((state) => state.setCurrentPage);
+  const addConnection = useAppStore((state) => state.addConnection);
+  const setActiveConnection = useAppStore((state) => state.setActiveConnection);
+  const connections = useAppStore((state) => state.connections);
+  
   const [status, setStatus] = useState<string>('unknown');
   const [busy, setBusy] = useState(false);
   const [bundlePresent, setBundlePresent] = useState<boolean | null>(null);
@@ -20,21 +25,35 @@ export default function MariaDbManagementPage() {
   const [installError, setInstallError] = useState<string | undefined>(undefined);
   const [initLog, setInitLog] = useState<string>('');
   const [serverLog, setServerLog] = useState<string>('');
+  const [platformSupported, setPlatformSupported] = useState<boolean | null>(null);
 
-  const addLog = (msg: string) => setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  // Debug logging to track mount/unmount
+  useEffect(() => {
+    console.log('MariaDbManagementPage mounted');
+    return () => console.log('MariaDbManagementPage unmounted');
+  }, []);
+
+  const addLog = useCallback((msg: string) => setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]), []);
 
 
-  async function refreshStatus() {
+  const refreshStatus = useCallback(async () => {
     try {
       const s = await invoke('mariadb_status');
       setStatus(String(s));
     } catch (e) {
       setStatus('error');
     }
-  }
+  }, []);
 
   useEffect(() => {
     (async () => {
+      try {
+        const supported = await invoke('mariadb_platform_supported');
+        setPlatformSupported(Boolean(supported));
+      } catch (e) {
+        setPlatformSupported(false);
+      }
+
       await refreshStatus();
       try {
         const present = await invoke('mariadb_bundle_exists');
@@ -43,9 +62,9 @@ export default function MariaDbManagementPage() {
         setBundlePresent(false);
       }
     })();
-  }, []);
+  }, []); // Empty dependency - run once on mount
 
-  function ensureLocalConnection() {
+  const ensureLocalConnection = useCallback(() => {
     const existing = connections.find(
       (c) => c.dbType === 'mariadb' && (c.host ?? '') === DEFAULT_HOST && (c.port ?? '') === String(DEFAULT_PORT)
     );
@@ -70,9 +89,9 @@ export default function MariaDbManagementPage() {
       (c) => c.dbType === 'mariadb' && (c.host ?? '') === DEFAULT_HOST && (c.port ?? '') === String(DEFAULT_PORT)
     );
     return latest?.id;
-  }
+  }, [connections, addConnection]);
 
-  async function install() {
+  const install = useCallback(async () => {
     setInstallModalOpen(true);
     setInstallStatus('installing');
     setInstallError(undefined);
@@ -93,9 +112,9 @@ export default function MariaDbManagementPage() {
       setInstallError(errStr);
       setInstallStatus('error');
     }
-  }
+  }, [ensureLocalConnection, refreshStatus, addLog]);
 
-  async function start() {
+  const start = useCallback(async () => {
     setBusy(true);
     setMessage('Starting server...');
     addLog('Starting server...');
@@ -118,7 +137,7 @@ export default function MariaDbManagementPage() {
     } finally {
       setBusy(false);
     }
-  }
+  }, [ensureLocalConnection, setActiveConnection, refreshStatus, addLog]);
 
   // Poll init and server logs while installing or busy
   useEffect(() => {
@@ -144,7 +163,7 @@ export default function MariaDbManagementPage() {
     return () => { if (iv) window.clearInterval(iv); };
   }, [installStatus, busy]);
 
-  async function stop() {
+  const stop = useCallback(async () => {
     setBusy(true);
     setMessage('Stopping server...');
     addLog('Stopping server...');
@@ -160,7 +179,7 @@ export default function MariaDbManagementPage() {
     } finally {
       setBusy(false);
     }
-  }
+  }, [refreshStatus, addLog]);
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col">
@@ -188,6 +207,17 @@ export default function MariaDbManagementPage() {
       </div>
 
       <div className="flex-1 max-w-4xl mx-auto w-full p-8">
+        {platformSupported === false ? (
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8 text-center">
+            <h2 className="text-2xl font-semibold text-white mb-4">Coming Soon</h2>
+            <p className="text-zinc-400 mb-2">
+              Local MariaDB offline mode is currently available for <strong>Linux x86_64</strong> only.
+            </p>
+            <p className="text-zinc-400">
+              Windows and macOS support will be added in a future release.
+            </p>
+          </div>
+        ) : (
         <div className="grid gap-8">
           {/* Status Card */}
           <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6">
@@ -295,6 +325,7 @@ export default function MariaDbManagementPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

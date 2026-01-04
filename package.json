@@ -28,7 +28,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "pre-build": "pnpm run mariadb:build",
+    "pre-build": "bash -c 'if [[ \"$(uname -s)\" == \"Linux\" ]]; then pnpm run mariadb:build; else echo \"Skipping MariaDB build on non-Linux platform\"; fi'",
     "prebuild": "pnpm run pre-build",
     "build": "tsc && vite build",
     "preview": "vite preview",

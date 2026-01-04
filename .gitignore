@@ -32,19 +32,31 @@ target/
 temp_dl/
 temp_dl/*
 maria-db-files/
-src-tauri/bundled/mariadb/
-bundled/mariadb/
 bundled/
-bundled/*
+
+# Ignore MariaDB binaries but keep structure and templates
+src-tauri/bundled/mariadb/**/bin/mariadbd
+src-tauri/bundled/mariadb/**/bin/mariadb
+src-tauri/bundled/mariadb/**/bin/mariadbd-safe
+src-tauri/bundled/mariadb/**/lib/*.so*
+src-tauri/bundled/mariadb/**/share/
+src-tauri/bundled/mariadb/**/support-files/
+src-tauri/bundled/mariadb/**/data/
+# Keep templates and small helpers
+!src-tauri/bundled/mariadb/**/*.template
+!src-tauri/bundled/mariadb/**/bin/resolveip
+!src-tauri/bundled/mariadb/**/bin/my_print_defaults
+!src-tauri/bundled/mariadb/**/bin/mariadb-install-db
 
 # Local MariaDB runtime data created by the app
 .local/share/er-maker/mariadb/
 ~/.local/share/er-maker/mariadb/
 
-# Do not commit extracted binary artifacts
-**/bin/mariadbd
-**/bin/mariadb
-**/lib/*.so*
+# Do not commit extracted binary artifacts or runtime files
+**/mariadb.log
+**/mariadb.pid
+**/mariadb.sock
+**/*.lower-test
 
 
 # Release assets

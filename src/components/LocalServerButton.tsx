@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Database, Loader2, Play, Square, AlertCircle } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
@@ -12,26 +12,34 @@ export default function LocalServerButton() {
   const [busy, setBusy] = useState(false);
   const [bundlePresent, setBundlePresent] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [platformSupported, setPlatformSupported] = useState<boolean | null>(null);
 
-  async function refreshStatus() {
+  const refreshStatus = useCallback(async () => {
     try {
       const s = await invoke('mariadb_status');
       setStatus(String(s));
     } catch (e) {
       setStatus('error');
     }
-  }
+  }, []);
 
   useEffect(() => {
-    refreshStatus();
-    invoke('mariadb_bundle_exists')
-      .then((res) => setBundlePresent(Boolean(res)))
-      .catch(() => setBundlePresent(false));
+    invoke('mariadb_platform_supported')
+      .then((res) => {
+        setPlatformSupported(Boolean(res));
+        if (res) {
+          refreshStatus();
+          invoke('mariadb_bundle_exists')
+            .then((res) => setBundlePresent(Boolean(res)))
+            .catch(() => setBundlePresent(false));
+        }
+      })
+      .catch(() => setPlatformSupported(false));
     
     // Poll status every 5 seconds
     const interval = setInterval(refreshStatus, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshStatus]);
 
   // LocalServerButton is intentionally lightweight; logs are displayed in the MariaDB manager page.
 
@@ -95,7 +103,8 @@ export default function LocalServerButton() {
     }
   }
 
-  if (bundlePresent === null) return null; // Loading initial state
+  if (platformSupported === null || bundlePresent === null) return null; // Loading initial state
+  if (platformSupported === false) return null; // Platform not supported
 
   const isRunning = status === 'running';
   
