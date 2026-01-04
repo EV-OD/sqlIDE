@@ -6,6 +6,11 @@ mod files;
 use types::*;
 use database::*;
 use mermaid::generate_mermaid_code;
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+use std::fs;
 
 // Tauri Commands - ER Diagram Generation
 #[tauri::command]
@@ -151,8 +156,147 @@ pub fn run() {
             list_directory,
             get_default_project_path,
             get_next_project_folder,
-            path_exists
+            path_exists,
+            // MariaDB offline manager commands
+            mariadb_install,
+            mariadb_start,
+            mariadb_stop,
+            mariadb_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+static DB_CHILD: Lazy<Mutex<Option<Child>>> = Lazy::new(|| Mutex::new(None));
+
+fn recursive_copy(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
+    if !src.exists() {
+        return Err(format!("source path does not exist: {}", src.display()));
+    }
+    if src.is_file() {
+        if let Some(parent) = dst.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        fs::copy(src, dst).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let file_type = entry.file_type().map_err(|e| e.to_string())?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            recursive_copy(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn platform_folder_name() -> String {
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    format!("{}-{}", os, arch)
+}
+
+#[tauri::command]
+fn mariadb_install() -> Result<String, String> {
+    // Look for bundled resources: <resource_dir>/bundled/mariadb/<platform>
+    let resource_dir = tauri::api::path::resource_dir().ok_or("resource dir not found")?;
+    let platform = platform_folder_name();
+    let src = resource_dir.join("bundled").join("mariadb").join(&platform);
+    if !src.exists() {
+        return Err(format!("bundled mariadb not found: {}", src.display()));
+    }
+
+    let data_dir = dirs::data_local_dir()
+        .ok_or("failed to get local data directory")?
+        .join("er-maker");
+    let dest = data_dir.join("mariadb");
+    fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+
+    recursive_copy(&src, &dest)?;
+
+    Ok(format!("installed to {}", dest.display()))
+}
+
+#[tauri::command]
+fn mariadb_start(port: Option<u16>) -> Result<String, String> {
+    let data_dir = dirs::data_local_dir()
+        .ok_or("failed to get local data directory")?
+        .join("er-maker");
+    let mariadb_dir = data_dir.join("mariadb");
+    if !mariadb_dir.exists() {
+        return Err("mariadb not installed; please run install first".into());
+    }
+
+    let bin_dir = mariadb_dir.join("bin");
+    let mariadbd = if cfg!(windows) { bin_dir.join("mysqld.exe") } else { bin_dir.join("mariadbd") };
+    if !mariadbd.exists() {
+        return Err(format!("mariadb server binary not found: {}", mariadbd.display()));
+    }
+
+    let datadir = mariadb_dir.join("data");
+    fs::create_dir_all(&datadir).map_err(|e| e.to_string())?;
+
+    // initialize if needed
+    if !datadir.join("mysql").exists() {
+        let init_status = Command::new(&mariadbd)
+            .arg("--initialize-insecure")
+            .arg(format!("--datadir={}", datadir.display()))
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !init_status.status.success() {
+            return Err(format!("mariadb initialize failed: {}", String::from_utf8_lossy(&init_status.stderr)));
+        }
+    }
+
+    // write simple my.cnf in mariadb_dir
+    let mycnf = mariadb_dir.join("my.cnf");
+    let p = port.unwrap_or(3307);
+    let mycnf_contents = format!(
+        "[mysqld]\ndatadir={}\nport={}\nbind-address=127.0.0.1\nskip-networking=0\n",
+        datadir.display(), p
+    );
+    fs::write(&mycnf, mycnf_contents).map_err(|e| e.to_string())?;
+
+    // spawn server
+    let child = Command::new(&mariadbd)
+        .arg(format!("--defaults-file={}", mycnf.display()))
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    *DB_CHILD.lock().map_err(|e| e.to_string())? = Some(child);
+    Ok(format!("started mariadb on port {}", p))
+}
+
+#[tauri::command]
+fn mariadb_stop() -> Result<String, String> {
+    let mut guard = DB_CHILD.lock().map_err(|e| e.to_string())?;
+    if let Some(mut child) = guard.take() {
+        let _ = child.kill();
+        let _ = child.wait();
+        Ok("stopped".into())
+    } else {
+        Err("not running".into())
+    }
+}
+
+#[tauri::command]
+fn mariadb_status() -> Result<String, String> {
+    let guard = DB_CHILD.lock().map_err(|e| e.to_string())?;
+    if let Some(child) = guard.as_ref() {
+        match child.try_wait() {
+            Ok(Some(status)) => Ok(format!("exited: {}", status)),
+            Ok(None) => Ok("running".into()),
+            Err(e) => Err(e.to_string()),
+        }
+    } else {
+        Ok("stopped".into())
+    }
 }
