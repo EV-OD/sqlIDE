@@ -159,6 +159,7 @@ pub fn run() {
             path_exists,
             // MariaDB offline manager commands
             mariadb_install,
+            mariadb_bundle_exists,
             mariadb_start,
             mariadb_stop,
             mariadb_status
@@ -199,6 +200,14 @@ fn platform_folder_name() -> String {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
     format!("{}-{}", os, arch)
+}
+
+#[tauri::command]
+fn mariadb_bundle_exists() -> Result<bool, String> {
+    let resource_dir = tauri::api::path::resource_dir().ok_or("resource dir not found")?;
+    let platform = platform_folder_name();
+    let src = resource_dir.join("bundled").join("mariadb").join(&platform);
+    Ok(src.exists())
 }
 
 #[tauri::command]

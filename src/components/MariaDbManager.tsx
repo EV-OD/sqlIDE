@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/tauri';
 export default function MariaDbManager() {
   const [status, setStatus] = useState<string>('unknown');
   const [busy, setBusy] = useState(false);
+  const [bundlePresent, setBundlePresent] = useState<boolean | null>(null);
 
   async function refreshStatus() {
     try {
@@ -15,7 +16,15 @@ export default function MariaDbManager() {
   }
 
   useEffect(() => {
-    refreshStatus();
+    (async () => {
+      await refreshStatus();
+      try {
+        const present = await invoke('mariadb_bundle_exists');
+        setBundlePresent(Boolean(present));
+      } catch (e) {
+        setBundlePresent(false);
+      }
+    })();
   }, []);
 
   async function install() {
@@ -65,7 +74,12 @@ export default function MariaDbManager() {
       <h3>MariaDB (bundled) Manager</h3>
       <div>Status: <strong>{status}</strong></div>
       <div style={{ marginTop: 8 }}>
-        <button onClick={install} disabled={busy}>Install bundled MariaDB</button>
+        {bundlePresent === false && (
+          <div style={{ color: 'crimson', marginBottom: 8 }}>
+            Bundled MariaDB for your platform is not present in the app resources. You can still copy a bundle to <code>src-tauri/bundled/mariadb/&lt;os-arch&gt;</code> and then click Install.
+          </div>
+        )}
+        <button onClick={install} disabled={busy || bundlePresent === false}>Install bundled MariaDB</button>
         <button onClick={start} disabled={busy} style={{ marginLeft: 8 }}>Start</button>
         <button onClick={stop} disabled={busy} style={{ marginLeft: 8 }}>Stop</button>
         <button onClick={refreshStatus} disabled={busy} style={{ marginLeft: 8 }}>Refresh</button>
