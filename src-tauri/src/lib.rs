@@ -228,6 +228,101 @@ fn ensure_support_binaries(bin_dir: &PathBuf) -> Result<(), String> {
     if !my_print.exists() {
         return Err(format!("my_print_defaults not found at {}", my_print.display()));
     }
+    // Ensure resolveip and mariadb-install-db exist in bin_dir. If they are
+    // present elsewhere in the extracted bundle (scripts/ or extra/), copy
+    // them into bin_dir. If resolveip is missing entirely, generate a tiny
+    // portable helper so initialization works on client machines.
+    let mariadb_dir = bin_dir.parent().ok_or("invalid bin dir")?;
+
+    let resolveip_path = bin_dir.join("resolveip");
+    if !resolveip_path.exists() {
+        let candidates = [
+            mariadb_dir.join("bin/resolveip"),
+            mariadb_dir.join("extra/resolveip"),
+            mariadb_dir.join("scripts/resolveip"),
+        ];
+        for cand in &candidates {
+            if cand.exists() {
+                fs::copy(cand, &resolveip_path).map_err(|e| e.to_string())?;
+                #[cfg(unix)]
+                fs::set_permissions(&resolveip_path, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+                break;
+            }
+        }
+        if !resolveip_path.exists() {
+            // generate a minimal resolveip helper
+            let script = r#"#!/usr/bin/env sh
+host="$1"
+if [ -z "$host" ]; then
+  echo "Usage: resolveip hostname" >&2
+  exit 2
+fi
+if command -v getent >/dev/null 2>&1; then
+  getent hosts "$host" | awk '{print $1, $2; exit 0}' && exit 0
+fi
+if command -v python3 >/dev/null 2>&1; then
+  python3 - <<PY 2>/dev/null
+import sys,socket
+try:
+    a = socket.gethostbyname_ex(sys.argv[1])
+    name = a[0] if a[0] else sys.argv[1]
+    ip = a[2][0] if a[2] else ''
+    print(ip, name)
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+PY
+  if [ $? -eq 0 ]; then exit 0; fi
+fi
+if command -v nslookup >/dev/null 2>&1; then
+  ip=$(nslookup "$host" 2>/dev/null | awk '/^Address: /{print $2; exit}')
+  if [ -n "$ip" ]; then
+    echo "$ip $host"
+    exit 0
+  fi
+fi
+echo "Could not resolve $host" >&2
+exit 1
+"#;
+            fs::write(&resolveip_path, script).map_err(|e| e.to_string())?;
+            #[cfg(unix)]
+            fs::set_permissions(&resolveip_path, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+        }
+    }
+
+    // Ensure mariadb-install-db exists in bin_dir: copy from scripts/ or extra/ if present
+    let installer = bin_dir.join("mariadb-install-db");
+    if !installer.exists() {
+        let cand1 = mariadb_dir.join("scripts/mariadb-install-db");
+        let cand2 = mariadb_dir.join("extra/mariadb-install-db");
+        let cand3 = mariadb_dir.join("bin/mariadb-install-db");
+        for cand in &[cand1, cand2, cand3] {
+            if cand.exists() {
+                fs::copy(cand, &installer).map_err(|e| e.to_string())?;
+                #[cfg(unix)]
+                fs::set_permissions(&installer, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+                break;
+            }
+        }
+    }
+
+    // Ensure executables in bin_dir are executable (some copy operations may strip exec bit)
+    if bin_dir.exists() && bin_dir.is_dir() {
+        for entry in fs::read_dir(bin_dir).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            if path.is_file() {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mut perms = fs::metadata(&path).map_err(|e| e.to_string())?.permissions();
+                    // set owner execute bit along with existing perms
+                    perms.set_mode(perms.mode() | 0o755);
+                    fs::set_permissions(&path, perms).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+    }
     Ok(())
 }
 

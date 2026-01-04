@@ -52,6 +52,61 @@ if [ -f "scripts/mariadb-install-db" ]; then
   mv "scripts/mariadb-install-db" "$TMP_KEEP/bin/"
 fi
 
+# Preserve any resolveip helper if present, otherwise generate a small portable
+# resolveip script so pruned bundles will always include it (mariadb-install-db
+# expects it during initialization).
+if [ -f "bin/resolveip" ]; then
+  mv "bin/resolveip" "$TMP_KEEP/bin/"
+elif [ -f "extra/resolveip" ]; then
+  mv "extra/resolveip" "$TMP_KEEP/bin/" || true
+else
+  # create a tiny resolveip helper that tries common resolvers
+  cat > "$TMP_KEEP/bin/resolveip" <<'EOF'
+#!/usr/bin/env sh
+host="$1"
+if [ -z "$host" ]; then
+  echo "Usage: resolveip hostname" >&2
+  exit 2
+fi
+
+# Preserve my_print_defaults which is needed by mariadb-install-db to read defaults
+if [ -f "extra/my_print_defaults" ]; then
+  mkdir -p "$TMP_KEEP/extra"
+  mv "extra/my_print_defaults" "$TMP_KEEP/extra/" || true
+fi
+if [ -f "bin/my_print_defaults" ]; then
+  mv "bin/my_print_defaults" "$TMP_KEEP/bin/" || true
+fi
+if command -v getent >/dev/null 2>&1; then
+  getent hosts "$host" | awk '{print $1, $2; exit 0}' && exit 0
+fi
+if command -v python3 >/dev/null 2>&1; then
+  python3 - <<PY 2>/dev/null
+import sys,socket
+try:
+    a = socket.gethostbyname_ex(sys.argv[1])
+    name = a[0] if a[0] else sys.argv[1]
+    ip = a[2][0] if a[2] else ''
+    print(ip, name)
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+PY
+  if [ $? -eq 0 ]; then exit 0; fi
+fi
+if command -v nslookup >/dev/null 2>&1; then
+  ip=$(nslookup "$host" 2>/dev/null | awk '/^Address: /{print $2; exit}')
+  if [ -n "$ip" ]; then
+    echo "$ip $host"
+    exit 0
+  fi
+fi
+echo "Could not resolve $host" >&2
+exit 1
+EOF
+  chmod +x "$TMP_KEEP/bin/resolveip" || true
+fi
+
 mkdir -p "$TMP_KEEP/share/english"
 if [ -f "share/mysql/english/errmsg.sys" ]; then
   mv "share/mysql/english/errmsg.sys" "$TMP_KEEP/share/english/" || true
