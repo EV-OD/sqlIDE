@@ -28,7 +28,7 @@
     "active": true,
     "targets": "all",
         "resources": [
-          "src-tauri/bundled/**"
+          "bundled/**/*"
         ],
     "icon": [
       "icons/32x32.png",

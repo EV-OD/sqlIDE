@@ -139,4 +139,4 @@ export interface DiagramSettings {
 }
 
 // App State
-export type AppPage = "welcome" | "connection-manager" | "editor" | "er-generator";
+export type AppPage = "welcome" | "connection-manager" | "editor" | "er-generator" | "mariadb-manager";

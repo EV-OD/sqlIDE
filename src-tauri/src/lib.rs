@@ -7,10 +7,18 @@ use types::*;
 use database::*;
 use mermaid::generate_mermaid_code;
 use std::path::PathBuf;
+use std::net::TcpStream;
+use std::{thread, time::Duration};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
 use std::fs;
+use std::io::{Read, Write};
+use tauri::path::BaseDirectory;
+use tauri::AppHandle;
+use tauri::Manager;
 
 // Tauri Commands - ER Diagram Generation
 #[tauri::command]
@@ -196,26 +204,179 @@ fn recursive_copy(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
+fn ensure_support_binaries(bin_dir: &PathBuf) -> Result<(), String> {
+    let my_print = bin_dir.join("my_print_defaults");
+    if !my_print.exists() {
+        // attempt to copy from common system locations as a fallback
+        let candidates = [
+            "/usr/bin/my_print_defaults",
+            "/usr/local/bin/my_print_defaults",
+        ];
+        for cand in candidates {
+            let p = PathBuf::from(cand);
+            if p.exists() {
+                fs::copy(&p, &my_print).map_err(|e| e.to_string())?;
+                #[cfg(unix)]
+                {
+                    fs::set_permissions(&my_print, fs::Permissions::from_mode(0o755))
+                        .map_err(|e| e.to_string())?;
+                }
+                break;
+            }
+        }
+    }
+    if !my_print.exists() {
+        return Err(format!("my_print_defaults not found at {}", my_print.display()));
+    }
+    Ok(())
+}
+
+fn ensure_sbin_server(mariadb_dir: &PathBuf, bin_dir: &PathBuf) -> Result<(), String> {
+    // some mariadb-install-db scripts expect mariadbd in sbin relative to basedir
+    let sbin_dir = mariadb_dir.join("sbin");
+    fs::create_dir_all(&sbin_dir).map_err(|e| e.to_string())?;
+
+    let server_bin = if cfg!(windows) {
+        bin_dir.join("mariadbd.exe")
+    } else {
+        bin_dir.join("mariadbd")
+    };
+
+    if !server_bin.exists() {
+        return Err(format!("mariadbd binary not found at {}", server_bin.display()));
+    }
+
+    let sbin_target = if cfg!(windows) {
+        sbin_dir.join("mariadbd.exe")
+    } else {
+        sbin_dir.join("mariadbd")
+    };
+
+    if !sbin_target.exists() {
+        fs::copy(&server_bin, &sbin_target).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+fn port_is_listening(port: u16) -> bool {
+    TcpStream::connect(("127.0.0.1", port)).is_ok()
+}
+
+fn wait_for_port(port: u16, attempts: u32, delay_ms: u64) -> Result<(), String> {
+    for _ in 0..attempts {
+        if port_is_listening(port) {
+            return Ok(());
+        }
+        thread::sleep(Duration::from_millis(delay_ms));
+    }
+    Err(format!("server did not become ready on port {}", port))
+}
+
 fn platform_folder_name() -> String {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
     format!("{}-{}", os, arch)
 }
 
+fn get_mariadb_dir() -> Result<PathBuf, String> {
+    let data_dir = dirs::data_local_dir()
+        .ok_or("failed to get local data directory")?
+        .join("er-maker");
+    Ok(data_dir.join("mariadb"))
+}
+
+fn get_pid_file() -> Result<PathBuf, String> {
+    Ok(get_mariadb_dir()?.join("mariadb.pid"))
+}
+
+fn read_pid_from_file() -> Option<u32> {
+    let path = get_pid_file().ok()?;
+    let mut file = fs::File::open(&path).ok()?;
+    let mut content = String::new();
+    file.read_to_string(&mut content).ok()?;
+    content.trim().parse::<u32>().ok()
+}
+
+fn write_pid_to_file(pid: u32) -> Result<(), String> {
+    let path = get_pid_file()?;
+    let mut file = fs::File::create(&path).map_err(|e| e.to_string())?;
+    file.write_all(pid.to_string().as_bytes()).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn remove_pid_file() -> Result<(), String> {
+    let path = get_pid_file()?;
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn is_process_running(pid: u32) -> bool {
+    use std::process::Command;
+    Command::new("kill")
+        .arg("-0")
+        .arg(pid.to_string())
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn is_process_running(pid: u32) -> bool {
+    use std::process::Command;
+    Command::new("tasklist")
+        .arg("/FI")
+        .arg(format!("PID eq {}", pid))
+        .output()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout).contains(&pid.to_string())
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(unix)]
+fn kill_process(pid: u32) -> Result<(), String> {
+    use std::process::Command;
+    Command::new("kill")
+        .arg(pid.to_string())
+        .output()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn kill_process(pid: u32) -> Result<(), String> {
+    use std::process::Command;
+    Command::new("taskkill")
+        .arg("/PID")
+        .arg(pid.to_string())
+        .arg("/F")
+        .output()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
-fn mariadb_bundle_exists() -> Result<bool, String> {
-    let resource_dir = tauri::api::path::resource_dir().ok_or("resource dir not found")?;
+fn mariadb_bundle_exists(handle: AppHandle) -> Result<bool, String> {
     let platform = platform_folder_name();
-    let src = resource_dir.join("bundled").join("mariadb").join(&platform);
+    let src = handle
+        .path()
+        .resolve(&format!("bundled/mariadb/{}", platform), BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
     Ok(src.exists())
 }
 
 #[tauri::command]
-fn mariadb_install() -> Result<String, String> {
-    // Look for bundled resources: <resource_dir>/bundled/mariadb/<platform>
-    let resource_dir = tauri::api::path::resource_dir().ok_or("resource dir not found")?;
+fn mariadb_install(handle: AppHandle) -> Result<String, String> {
+    // Look for bundled resources: $RESOURCE/bundled/mariadb/<platform>
     let platform = platform_folder_name();
-    let src = resource_dir.join("bundled").join("mariadb").join(&platform);
+    let src = handle
+        .path()
+        .resolve(&format!("bundled/mariadb/{}", platform), BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
     if !src.exists() {
         return Err(format!("bundled mariadb not found: {}", src.display()));
     }
@@ -227,6 +388,10 @@ fn mariadb_install() -> Result<String, String> {
     fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
 
     recursive_copy(&src, &dest)?;
+
+    // ensure helper binaries exist in installed copy
+    ensure_support_binaries(&dest.join("bin"))?;
+    ensure_sbin_server(&dest, &dest.join("bin"))?;
 
     Ok(format!("installed to {}", dest.display()))
 }
@@ -247,49 +412,145 @@ fn mariadb_start(port: Option<u16>) -> Result<String, String> {
         return Err(format!("mariadb server binary not found: {}", mariadbd.display()));
     }
 
+    ensure_support_binaries(&bin_dir)?;
+    ensure_sbin_server(&mariadb_dir, &bin_dir)?;
+
+    let p = port.unwrap_or(3307);
+
+    {
+        // if we already have a tracked child still running, avoid double-start
+        let mut guard = DB_CHILD.lock().map_err(|e| e.to_string())?;
+        if let Some(child) = guard.as_mut() {
+            match child.try_wait() {
+                Ok(None) => return Ok(format!("mariadb already running on port {}", p)),
+                Ok(Some(_)) => *guard = None,
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+    }
+
+    // if something else already listens on the target port, treat as running to avoid clashes
+    if port_is_listening(p) {
+        return Ok(format!("port {} already in use; assuming MariaDB is running", p));
+    }
+
     let datadir = mariadb_dir.join("data");
+    // clean partial data dir if it exists but is not initialized
+    if datadir.exists() && !datadir.join("mysql").exists() {
+        fs::remove_dir_all(&datadir).map_err(|e| e.to_string())?;
+    }
     fs::create_dir_all(&datadir).map_err(|e| e.to_string())?;
 
     // initialize if needed
     if !datadir.join("mysql").exists() {
-        let init_status = Command::new(&mariadbd)
-            .arg("--initialize-insecure")
+        let installer = bin_dir.join("mariadb-install-db");
+        if !installer.exists() {
+            return Err(format!("mariadb-install-db not found at {}", installer.display()));
+        }
+
+        let mut cmd = Command::new(&installer);
+        let current_user = whoami::username();
+        cmd.current_dir(&mariadb_dir)
+            .arg("--no-defaults")
+            .arg(format!("--basedir={}", mariadb_dir.display()))
             .arg(format!("--datadir={}", datadir.display()))
-            .stderr(Stdio::piped())
-            .output()
-            .map_err(|e| e.to_string())?;
+            .arg(format!("--user={}", current_user))
+            .arg("--auth-root-authentication-method=normal")
+            .arg("--skip-test-db")
+            .arg("--force")
+            .env(
+                "PATH",
+                format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default()),
+            )
+            .env("HOSTNAME", "localhost");
+        let init_status = cmd.output().map_err(|e| e.to_string())?;
         if !init_status.status.success() {
-            return Err(format!("mariadb initialize failed: {}", String::from_utf8_lossy(&init_status.stderr)));
+            return Err(format!(
+                "mariadb initialize failed: status {:?}\nstdout: {}\nstderr: {}",
+                init_status.status.code(),
+                String::from_utf8_lossy(&init_status.stdout),
+                String::from_utf8_lossy(&init_status.stderr)
+            ));
         }
     }
 
-    // write simple my.cnf in mariadb_dir
+    // write my.cnf in mariadb_dir with app-local paths to avoid clashing with system mysql socket/pid
     let mycnf = mariadb_dir.join("my.cnf");
-    let p = port.unwrap_or(3307);
+    let socket_path = mariadb_dir.join("mariadb.sock");
+    let pid_path = mariadb_dir.join("mariadb.pid");
+    let log_path = mariadb_dir.join("mariadb.log");
     let mycnf_contents = format!(
-        "[mysqld]\ndatadir={}\nport={}\nbind-address=127.0.0.1\nskip-networking=0\n",
-        datadir.display(), p
+        "[mysqld]\n\
+datadir={}\n\
+port={}\n\
+bind-address=127.0.0.1\n\
+socket={}\n\
+pid-file={}\n\
+log-error={}\n\
+skip-networking=0\n\
+skip-name-resolve\n",
+        datadir.display(),
+        p,
+        socket_path.display(),
+        pid_path.display(),
+        log_path.display()
     );
     fs::write(&mycnf, mycnf_contents).map_err(|e| e.to_string())?;
 
     // spawn server
-    let child = Command::new(&mariadbd)
+    let mut child = Command::new(&mariadbd)
         .arg(format!("--defaults-file={}", mycnf.display()))
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| e.to_string())?;
 
+    let pid = child.id();
+    write_pid_to_file(pid)?;
+
     *DB_CHILD.lock().map_err(|e| e.to_string())? = Some(child);
+
+    // wait for server to be ready before returning
+    wait_for_port(p, 50, 200).map_err(|e| {
+        // attempt to clean up child if it failed to start
+        if let Ok(mut guard) = DB_CHILD.lock() {
+            if let Some(mut ch) = guard.take() {
+                let _ = ch.kill();
+            }
+        }
+        let _ = remove_pid_file();
+        e
+    })?;
+
     Ok(format!("started mariadb on port {}", p))
 }
 
 #[tauri::command]
 fn mariadb_stop() -> Result<String, String> {
+    // First, try to stop via PID file (our own managed server)
+    if let Some(pid) = read_pid_from_file() {
+        if is_process_running(pid) {
+            kill_process(pid)?;
+            remove_pid_file()?;
+            
+            // Clear tracked child
+            if let Ok(mut guard) = DB_CHILD.lock() {
+                *guard = None;
+            }
+            
+            return Ok("stopped".into());
+        } else {
+            // PID file exists but process not running - clean up stale file
+            let _ = remove_pid_file();
+        }
+    }
+    
+    // Fallback: try to stop tracked child process
     let mut guard = DB_CHILD.lock().map_err(|e| e.to_string())?;
     if let Some(mut child) = guard.take() {
         let _ = child.kill();
         let _ = child.wait();
+        let _ = remove_pid_file();
         Ok("stopped".into())
     } else {
         Err("not running".into())
@@ -298,10 +559,24 @@ fn mariadb_stop() -> Result<String, String> {
 
 #[tauri::command]
 fn mariadb_status() -> Result<String, String> {
-    let guard = DB_CHILD.lock().map_err(|e| e.to_string())?;
-    if let Some(child) = guard.as_ref() {
+    // First check PID file (our managed server)
+    if let Some(pid) = read_pid_from_file() {
+        if is_process_running(pid) {
+            return Ok("running".into());
+        } else {
+            // Stale PID file - clean up
+            let _ = remove_pid_file();
+        }
+    }
+    
+    // Fallback: check tracked child process
+    let mut guard = DB_CHILD.lock().map_err(|e| e.to_string())?;
+    if let Some(child) = guard.as_mut() {
         match child.try_wait() {
-            Ok(Some(status)) => Ok(format!("exited: {}", status)),
+            Ok(Some(status)) => {
+                *guard = None;
+                Ok(format!("exited: {}", status))
+            },
             Ok(None) => Ok("running".into()),
             Err(e) => Err(e.to_string()),
         }

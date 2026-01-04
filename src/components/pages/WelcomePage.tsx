@@ -1,5 +1,6 @@
-import { Database, FolderOpen, Plus, Settings, Zap, GitBranch } from "lucide-react";
+import { Database, FolderOpen, Plus, Settings, Zap, GitBranch, Server } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
+import LocalServerButton from "../LocalServerButton";
 
 export default function WelcomePage() {
   const { setCurrentPage, connections } = useAppStore();
@@ -56,6 +57,18 @@ export default function WelcomePage() {
           <GitBranch className="w-5 h-5" />
           ER Diagram Generator
         </button>
+        
+        <div className="flex items-center gap-2">
+          <LocalServerButton />
+          <button
+            onClick={() => setCurrentPage("mariadb-manager")}
+            className="p-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg transition-colors border border-zinc-700"
+            title="Manage Local Database"
+          >
+            <Server className="w-5 h-5" />
+          </button>
+        </div>
+
         {connections.length > 0 && (
           <button
             onClick={() => setCurrentPage("connection-manager")}
@@ -67,20 +80,22 @@ export default function WelcomePage() {
         )}
       </div>
 
-      {/* Features */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl w-full">
-        {features.map((feature) => (
-          <div
-            key={feature.title}
-            className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-6 hover:border-zinc-600/50 transition-colors"
-          >
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-zinc-700/50 mb-4">
-              <feature.icon className="w-6 h-6 text-blue-400" />
+      <div className="max-w-5xl w-full space-y-8">
+        {/* Features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+          {features.map((feature) => (
+            <div
+              key={feature.title}
+              className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-6 hover:border-zinc-600/50 transition-colors"
+            >
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-zinc-700/50 mb-4">
+                <feature.icon className="w-6 h-6 text-blue-400" />
+              </div>
+              <h3 className="text-white font-semibold mb-2">{feature.title}</h3>
+              <p className="text-zinc-400 text-sm">{feature.description}</p>
             </div>
-            <h3 className="text-white font-semibold mb-2">{feature.title}</h3>
-            <p className="text-zinc-400 text-sm">{feature.description}</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* Recent Connections */}

@@ -3,6 +3,7 @@ import WelcomePage from "./components/pages/WelcomePage";
 import ConnectionManagerPage from "./components/pages/ConnectionManager";
 import EditorPage from "./components/pages/EditorPage";
 import ErGenerator from "./components/ErGenerator";
+import MariaDbManagementPage from "./components/pages/MariaDbManagementPage";
 
 function App() {
   const { currentPage } = useAppStore();
@@ -13,6 +14,7 @@ function App() {
       {currentPage === "connection-manager" && <ConnectionManagerPage />}
       {currentPage === "editor" && <EditorPage />}
       {currentPage === "er-generator" && <ErGeneratorPage />}
+      {currentPage === "mariadb-manager" && <MariaDbManagementPage />}
     </div>
   );
 }
