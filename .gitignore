@@ -22,3 +22,27 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+# Tauri / bundling outputs
+src-tauri/target/
+target/
+
+# MariaDB bundles and temp downloads (local developer tools)
+temp_dl/
+temp_dl/*
+maria-db-files/
+src-tauri/bundled/mariadb/
+bundled/mariadb/
+bundled/
+bundled/*
+
+# Local MariaDB runtime data created by the app
+.local/share/er-maker/mariadb/
+~/.local/share/er-maker/mariadb/
+
+# Do not commit extracted binary artifacts
+**/bin/mariadbd
+**/bin/mariadb
+**/lib/*.so*
+

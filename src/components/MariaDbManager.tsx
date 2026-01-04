@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../store/useAppStore';
+import { InstallModal } from './ui/InstallModal';
 
 const DEFAULT_PORT = 3307;
 const DEFAULT_HOST = '127.0.0.1';
@@ -11,6 +12,10 @@ export default function MariaDbManager() {
   const [busy, setBusy] = useState(false);
   const [bundlePresent, setBundlePresent] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const [installModalOpen, setInstallModalOpen] = useState(false);
+  const [installStatus, setInstallStatus] = useState<'idle' | 'installing' | 'success' | 'error'>('idle');
+  const [installError, setInstallError] = useState<string | undefined>(undefined);
 
   const existingLocal = useMemo(
     () =>
@@ -67,8 +72,10 @@ export default function MariaDbManager() {
   }
 
   async function install() {
-    setBusy(true);
-    setMessage(null);
+    setInstallModalOpen(true);
+    setInstallStatus('installing');
+    setInstallError(undefined);
+    
     try {
       const res = await invoke<string>('mariadb_install');
       setMessage(res);
@@ -77,11 +84,11 @@ export default function MariaDbManager() {
         setMessage((prev) => prev ?? '');
       }
       await refreshStatus();
+      setInstallStatus('success');
     } catch (e) {
       console.error(e);
-      alert(String(e));
-    } finally {
-      setBusy(false);
+      setInstallError(String(e));
+      setInstallStatus('error');
     }
   }
 
@@ -125,6 +132,12 @@ export default function MariaDbManager() {
 
   return (
     <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-5 w-full">
+      <InstallModal 
+        isOpen={installModalOpen} 
+        onClose={() => setInstallModalOpen(false)} 
+        status={installStatus} 
+        error={installError} 
+      />
       <div className="flex items-center justify-between gap-2 mb-3">
         <div>
           <h3 className="text-white font-semibold">Local MariaDB (offline bundle)</h3>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../../store/useAppStore';
 import { ArrowLeft, Database, Download, Play, Square, RefreshCw, Terminal } from 'lucide-react';
+import { InstallModal } from '../ui/InstallModal';
 
 const DEFAULT_PORT = 3307;
 const DEFAULT_HOST = '127.0.0.1';
@@ -14,7 +15,12 @@ export default function MariaDbManagementPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
 
+  const [installModalOpen, setInstallModalOpen] = useState(false);
+  const [installStatus, setInstallStatus] = useState<'idle' | 'installing' | 'success' | 'error'>('idle');
+  const [installError, setInstallError] = useState<string | undefined>(undefined);
+
   const addLog = (msg: string) => setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+
 
   async function refreshStatus() {
     try {
@@ -65,21 +71,25 @@ export default function MariaDbManagementPage() {
   }
 
   async function install() {
-    setBusy(true);
-    setMessage('Installing...');
+    setInstallModalOpen(true);
+    setInstallStatus('installing');
+    setInstallError(undefined);
     addLog('Starting installation...');
+    
     try {
       const res = await invoke<string>('mariadb_install');
       setMessage(res);
       addLog(res);
       ensureLocalConnection();
       await refreshStatus();
+      setInstallStatus('success');
     } catch (e) {
       console.error(e);
-      setMessage(`Error: ${e}`);
-      addLog(`Error: ${e}`);
-    } finally {
-      setBusy(false);
+      const errStr = String(e);
+      setMessage(`Error: ${errStr}`);
+      addLog(`Error: ${errStr}`);
+      setInstallError(errStr);
+      setInstallStatus('error');
     }
   }
 
@@ -128,6 +138,12 @@ export default function MariaDbManagementPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col">
+      <InstallModal 
+        isOpen={installModalOpen} 
+        onClose={() => setInstallModalOpen(false)} 
+        status={installStatus} 
+        error={installError} 
+      />
       {/* Header */}
       <div className="sticky top-0 z-10 bg-zinc-900 border-b border-zinc-800">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
@@ -166,17 +182,19 @@ export default function MariaDbManagementPage() {
             </div>
 
             <div className="flex flex-wrap gap-4">
-              {bundlePresent === false && (
+              {/* Always show Install button if not running, to allow re-install/repair */}
+              {status !== 'running' && (
                 <button
                   onClick={install}
-                  disabled={busy}
+                  disabled={busy || bundlePresent === false}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Download className="w-4 h-4" />
-                  Install Bundle
+                  {bundlePresent === false ? 'Bundle Missing' : 'Install / Reinstall Bundle'}
                 </button>
               )}
 
+              {/* Only show Start if we think it's installed (or at least bundle is present to try) */}
               {bundlePresent && status !== 'running' && (
                 <button
                   onClick={start}

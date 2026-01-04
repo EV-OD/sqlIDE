@@ -389,6 +389,13 @@ fn mariadb_install(handle: AppHandle) -> Result<String, String> {
 
     recursive_copy(&src, &dest)?;
 
+    // Setup my.cnf from dist template
+    let dist_template = dest.join("my.cnf.dist.template");
+    if dist_template.exists() {
+        let target_cnf = dest.join("my.cnf");
+        fs::copy(&dist_template, &target_cnf).map_err(|e| e.to_string())?;
+    }
+
     // ensure helper binaries exist in installed copy
     ensure_support_binaries(&dest.join("bin"))?;
     ensure_sbin_server(&dest, &dest.join("bin"))?;
@@ -476,30 +483,36 @@ fn mariadb_start(port: Option<u16>) -> Result<String, String> {
 
     // write my.cnf in mariadb_dir with app-local paths to avoid clashing with system mysql socket/pid
     let mycnf = mariadb_dir.join("my.cnf");
-    let socket_path = mariadb_dir.join("mariadb.sock");
-    let pid_path = mariadb_dir.join("mariadb.pid");
-    let log_path = mariadb_dir.join("mariadb.log");
-    let mycnf_contents = format!(
-        "[mysqld]\n\
-datadir={}\n\
-port={}\n\
-bind-address=127.0.0.1\n\
-socket={}\n\
-pid-file={}\n\
-log-error={}\n\
-skip-networking=0\n\
-skip-name-resolve\n",
-        datadir.display(),
-        p,
-        socket_path.display(),
-        pid_path.display(),
-        log_path.display()
-    );
-    fs::write(&mycnf, mycnf_contents).map_err(|e| e.to_string())?;
+    
+    // If my.cnf doesn't exist (e.g. manual install or old version), try to generate it or use defaults
+    if !mycnf.exists() {
+        let pid_path = mariadb_dir.join("mariadb.pid");
+        let log_path = mariadb_dir.join("mariadb.log");
+        let socket_path = mariadb_dir.join("mariadb.sock");
+        let mycnf_contents = format!(
+            "[mysqld]\n\
+    datadir={}\n\
+    port={}\n\
+    bind-address=127.0.0.1\n\
+    socket={}\n\
+    pid-file={}\n\
+    log-error={}\n\
+    skip-networking=0\n\
+    skip-name-resolve\n",
+            datadir.display(),
+            p,
+            socket_path.display(),
+            pid_path.display(),
+            log_path.display()
+        );
+        fs::write(&mycnf, mycnf_contents).map_err(|e| e.to_string())?;
+    }
 
     // spawn server
     let mut child = Command::new(&mariadbd)
+        .current_dir(&mariadb_dir)
         .arg(format!("--defaults-file={}", mycnf.display()))
+        .arg(format!("--port={}", p))
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
