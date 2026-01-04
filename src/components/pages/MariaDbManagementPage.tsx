@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../../store/useAppStore';
-import { ArrowLeft, Database, Download, Play, Square, RefreshCw, Terminal } from 'lucide-react';
+import { ArrowLeft, Database, Download, Play, Square, RefreshCw, Terminal, Loader2 } from 'lucide-react';
 import { InstallModal } from '../ui/InstallModal';
 
 const DEFAULT_PORT = 3307;
@@ -18,6 +18,8 @@ export default function MariaDbManagementPage() {
   const [installModalOpen, setInstallModalOpen] = useState(false);
   const [installStatus, setInstallStatus] = useState<'idle' | 'installing' | 'success' | 'error'>('idle');
   const [installError, setInstallError] = useState<string | undefined>(undefined);
+  const [initLog, setInitLog] = useState<string>('');
+  const [serverLog, setServerLog] = useState<string>('');
 
   const addLog = (msg: string) => setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
@@ -118,6 +120,30 @@ export default function MariaDbManagementPage() {
     }
   }
 
+  // Poll init and server logs while installing or busy
+  useEffect(() => {
+    let iv: number | undefined;
+    async function fetchLogs() {
+      try {
+        const init = await invoke('mariadb_read_log', { name: 'mariadb-init.log' });
+        setInitLog(String(init));
+      } catch (_) { setInitLog(''); }
+      try {
+        const srv = await invoke('mariadb_read_log', { name: 'mariadb.log' });
+        setServerLog(String(srv));
+      } catch (_) { setServerLog(''); }
+    }
+
+    // fetch once on mount
+    fetchLogs();
+
+    if (installStatus === 'installing' || busy) {
+      iv = window.setInterval(fetchLogs, 1000);
+    }
+
+    return () => { if (iv) window.clearInterval(iv); };
+  }, [installStatus, busy]);
+
   async function stop() {
     setBusy(true);
     setMessage('Stopping server...');
@@ -186,11 +212,15 @@ export default function MariaDbManagementPage() {
               {status !== 'running' && (
                 <button
                   onClick={install}
-                  disabled={busy || bundlePresent === false}
+                  disabled={installStatus === 'installing' || busy || bundlePresent === false}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  <Download className="w-4 h-4" />
-                  {bundlePresent === false ? 'Bundle Missing' : 'Install / Reinstall Bundle'}
+                  {installStatus === 'installing' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  {installStatus === 'installing' ? 'Installing...' : (bundlePresent === false ? 'Bundle Missing' : 'Install / Reinstall Bundle')}
                 </button>
               )}
 
@@ -198,11 +228,11 @@ export default function MariaDbManagementPage() {
               {bundlePresent && status !== 'running' && (
                 <button
                   onClick={start}
-                  disabled={busy}
+                  disabled={busy || installStatus === 'installing'}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  <Play className="w-4 h-4" />
-                  Start Server
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                  {busy ? 'Starting...' : 'Start Server'}
                 </button>
               )}
 
@@ -212,8 +242,8 @@ export default function MariaDbManagementPage() {
                   disabled={busy}
                   className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  <Square className="w-4 h-4" />
-                  Stop Server
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />}
+                  {busy ? 'Stopping...' : 'Stop Server'}
                 </button>
               )}
 
@@ -250,6 +280,18 @@ export default function MariaDbManagementPage() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+
+          {/* Backend logs */}
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 flex flex-col">
+            <h3 className="text-white font-medium mb-3">Installer Log</h3>
+            <div className="bg-black/50 rounded p-3 font-mono text-xs max-h-40 overflow-auto text-zinc-200">
+              {initLog ? <pre className="whitespace-pre-wrap">{initLog}</pre> : <span className="text-zinc-600 italic">(no init log)</span>}
+            </div>
+            <h3 className="text-white font-medium mt-4 mb-3">Server Log (tail)</h3>
+            <div className="bg-black/50 rounded p-3 font-mono text-xs max-h-48 overflow-auto text-zinc-200">
+              {serverLog ? <pre className="whitespace-pre-wrap">{serverLog}</pre> : <span className="text-zinc-600 italic">(no server log)</span>}
             </div>
           </div>
         </div>

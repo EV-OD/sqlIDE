@@ -46,3 +46,16 @@ bundled/*
 **/bin/mariadb
 **/lib/*.so*
 
+
+# Release assets
+*.tar.xz
+*.tar.gz
+*.zip
+
+# Local app data used by test scripts
+/home/*/.local/share/er-maker/
+~/.local/share/er-maker/
+
+# Bundled binaries (avoid committing large vendor binaries to git)
+src-tauri/bundled/mariadb/**
+

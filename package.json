@@ -28,10 +28,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "pre-build": "pnpm run mariadb:build",
+    "prebuild": "pnpm run pre-build",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "generate-icons": "bash scripts/generate-icons.sh"
+    "generate-icons": "bash scripts/generate-icons.sh",
+
+    "mariadb:prune": "bash scripts/prune-to-minimal.sh src-tauri/bundled/mariadb/linux-x86_64 -y",
+    "mariadb:generate-cnf": "bash scripts/generate-mycnf.sh src-tauri/bundled/mariadb/linux-x86_64 dist",
+    "mariadb:package": "bash scripts/package-minimal-mariadb.sh src-tauri/bundled/mariadb/linux-x86_64 mariadb-linux-x86_64-minimal-10.6.24.tar.xz",
+    "mariadb:test-install": "bash scripts/test-bundle-install.sh",
+    "mariadb:build": "pnpm run mariadb:prune && pnpm run mariadb:package",
+    "mariadb:remove": "bash scripts/remove-project-mariadb.sh"
   },
   "dependencies": {
     "@mermaid-js/mermaid-cli": "^11.12.0",

@@ -33,6 +33,8 @@ export default function LocalServerButton() {
     return () => clearInterval(interval);
   }, []);
 
+  // LocalServerButton is intentionally lightweight; logs are displayed in the MariaDB manager page.
+
   function ensureLocalConnection() {
     const existing = connections.find(
       (c) => c.dbType === 'mariadb' && (c.host ?? '') === DEFAULT_HOST && (c.port ?? '') === String(DEFAULT_PORT)
@@ -63,6 +65,7 @@ export default function LocalServerButton() {
   async function handleToggle() {
     setBusy(true);
     setError(null);
+    // logs are shown in the Local MariaDB Manager page
     try {
       if (status === 'running') {
         await invoke('mariadb_stop');
@@ -84,6 +87,7 @@ export default function LocalServerButton() {
     } catch (e) {
       console.error(e);
       setError(String(e));
+      // Logs are available in the Local MariaDB Manager page for details
       // Clear error after 3 seconds
       setTimeout(() => setError(null), 3000);
     } finally {
@@ -126,6 +130,8 @@ export default function LocalServerButton() {
            isRunning ? 'Local DB Running' : 'Start Local DB'}
         </span>
       </button>
+
+      {/* logs shown in the MariaDB manager page */}
 
       {/* Tooltip / Error Message */}
       {error && (

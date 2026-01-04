@@ -169,6 +169,7 @@ pub fn run() {
             mariadb_install,
             mariadb_bundle_exists,
             mariadb_start,
+                mariadb_read_log,
             mariadb_stop,
             mariadb_status
         ])
@@ -465,7 +466,7 @@ fn mariadb_bundle_exists(handle: AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn mariadb_install(handle: AppHandle) -> Result<String, String> {
+async fn mariadb_install(handle: AppHandle) -> Result<String, String> {
     // Look for bundled resources: $RESOURCE/bundled/mariadb/<platform>
     let platform = platform_folder_name();
     let src = handle
@@ -488,7 +489,32 @@ fn mariadb_install(handle: AppHandle) -> Result<String, String> {
     let dist_template = dest.join("my.cnf.dist.template");
     if dist_template.exists() {
         let target_cnf = dest.join("my.cnf");
-        fs::copy(&dist_template, &target_cnf).map_err(|e| e.to_string())?;
+        // Generate a machine-specific my.cnf from the dist template if not present.
+        if !target_cnf.exists() {
+            let tpl = fs::read_to_string(&dist_template).map_err(|e| e.to_string())?;
+            // Prepare replacements - use absolute paths for installed location
+            let basedir = dest.display().to_string();
+            let datadir = dest.join("data").display().to_string();
+            let pid_file = dest.join("mariadb.pid").display().to_string();
+            let log_file = dest.join("mariadb.log").display().to_string();
+            let socket = dest.join("mariadb.sock").display().to_string();
+            let plugin_dir = dest.join("lib/plugin").display().to_string();
+            // default port (installer/UI may override when starting)
+            let port = "3307".to_string();
+
+            let content = tpl
+                .replace("{{BASE_DIR}}", &basedir)
+                .replace("{{DATA_DIR}}", &datadir)
+                .replace("{{PID_FILE}}", &pid_file)
+                .replace("{{LOG_FILE}}", &log_file)
+                .replace("{{SOCKET}}", &socket)
+                .replace("{{PLUGIN_DIR}}", &plugin_dir)
+                .replace("{{PORT}}", &port);
+
+            fs::write(&target_cnf, content).map_err(|e| e.to_string())?;
+            #[cfg(unix)]
+            fs::set_permissions(&target_cnf, fs::Permissions::from_mode(0o644)).map_err(|e| e.to_string())?;
+        }
     }
 
     // ensure helper binaries exist in installed copy
@@ -499,7 +525,7 @@ fn mariadb_install(handle: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn mariadb_start(port: Option<u16>) -> Result<String, String> {
+async fn mariadb_start(port: Option<u16>) -> Result<String, String> {
     let data_dir = dirs::data_local_dir()
         .ok_or("failed to get local data directory")?
         .join("er-maker");
@@ -550,8 +576,10 @@ fn mariadb_start(port: Option<u16>) -> Result<String, String> {
             return Err(format!("mariadb-install-db not found at {}", installer.display()));
         }
 
+        // Run installer and capture output to a log file for the frontend to display
         let mut cmd = Command::new(&installer);
         let current_user = whoami::username();
+        let init_log = mariadb_dir.join("mariadb-init.log");
         cmd.current_dir(&mariadb_dir)
             .arg("--no-defaults")
             .arg(format!("--basedir={}", mariadb_dir.display()))
@@ -565,13 +593,20 @@ fn mariadb_start(port: Option<u16>) -> Result<String, String> {
                 format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default()),
             )
             .env("HOSTNAME", "localhost");
-        let init_status = cmd.output().map_err(|e| e.to_string())?;
-        if !init_status.status.success() {
+
+        let init_output = cmd.output().map_err(|e| e.to_string())?;
+        // write stdout/stderr to init log
+        let mut init_contents = Vec::new();
+        init_contents.extend_from_slice(&init_output.stdout);
+        init_contents.extend_from_slice(b"\n--- STDERR ---\n");
+        init_contents.extend_from_slice(&init_output.stderr);
+        fs::write(&init_log, &init_contents).map_err(|e| e.to_string())?;
+
+        if !init_output.status.success() {
             return Err(format!(
-                "mariadb initialize failed: status {:?}\nstdout: {}\nstderr: {}",
-                init_status.status.code(),
-                String::from_utf8_lossy(&init_status.stdout),
-                String::from_utf8_lossy(&init_status.stderr)
+                "mariadb initialize failed: status {:?}\nsee {} for details",
+                init_output.status.code(),
+                init_log.display()
             ));
         }
     }
@@ -586,6 +621,7 @@ fn mariadb_start(port: Option<u16>) -> Result<String, String> {
         let socket_path = mariadb_dir.join("mariadb.sock");
         let mycnf_contents = format!(
             "[mysqld]\n\
+    basedir={}\n\
     datadir={}\n\
     port={}\n\
     bind-address=127.0.0.1\n\
@@ -594,6 +630,7 @@ fn mariadb_start(port: Option<u16>) -> Result<String, String> {
     log-error={}\n\
     skip-networking=0\n\
     skip-name-resolve\n",
+            mariadb_dir.display(),
             datadir.display(),
             p,
             socket_path.display(),
@@ -603,13 +640,22 @@ fn mariadb_start(port: Option<u16>) -> Result<String, String> {
         fs::write(&mycnf, mycnf_contents).map_err(|e| e.to_string())?;
     }
 
-    // spawn server
+    // spawn server and redirect stdout/stderr to a log file so frontend can tail it
+    let server_log = mariadb_dir.join("mariadb.log");
+    let log_file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&server_log)
+        .map_err(|e| e.to_string())?;
+
     let mut child = Command::new(&mariadbd)
         .current_dir(&mariadb_dir)
         .arg(format!("--defaults-file={}", mycnf.display()))
+        .arg(format!("--basedir={}", mariadb_dir.display()))
+        .arg(format!("--datadir={}", datadir.display()))
         .arg(format!("--port={}", p))
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(Stdio::from(log_file.try_clone().map_err(|e| e.to_string())?))
+        .stderr(Stdio::from(log_file))
         .spawn()
         .map_err(|e| e.to_string())?;
 
@@ -691,4 +737,15 @@ fn mariadb_status() -> Result<String, String> {
     } else {
         Ok("stopped".into())
     }
+}
+
+#[tauri::command]
+fn mariadb_read_log(name: String) -> Result<String, String> {
+    let mariadb_dir = get_mariadb_dir()?;
+    let path = mariadb_dir.join(&name);
+    if !path.exists() {
+        return Ok("".to_string());
+    }
+    let s = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    Ok(s)
 }

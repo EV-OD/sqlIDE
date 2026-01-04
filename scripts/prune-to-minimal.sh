@@ -131,9 +131,10 @@ if [ -d "lib" ]; then
   mkdir -p "$TMP_KEEP/lib"
   # move lib files
   mv lib/* "$TMP_KEEP/lib/" 2>/dev/null || true
-  # inside plugin: keep only ha_aria.so
+  # inside plugin: keep ha_aria.so and any provider_* plugins (e.g. provider_bzip2.so)
   if [ -d "$TMP_KEEP/lib/plugin" ]; then
-    find "$TMP_KEEP/lib/plugin" -maxdepth 1 -type f ! -name 'ha_aria.so' -exec rm -f {} + || true
+    # preserve provider_*.so files as some installations reference them in my.cnf
+    find "$TMP_KEEP/lib/plugin" -maxdepth 1 -type f ! -name 'ha_aria.so' ! -name 'provider_*.so' -exec rm -f {} + || true
   fi
 fi
 
