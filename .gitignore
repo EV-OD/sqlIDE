@@ -48,6 +48,9 @@ src-tauri/bundled/mariadb/**/data/
 !src-tauri/bundled/mariadb/**/bin/my_print_defaults
 !src-tauri/bundled/mariadb/**/bin/mariadb-install-db
 
+# Allow placeholder so CI can keep an empty bundled dir when real bundles are not present
+!src-tauri/bundled/.gitkeep
+
 # Local MariaDB runtime data created by the app
 .local/share/er-maker/mariadb/
 ~/.local/share/er-maker/mariadb/
