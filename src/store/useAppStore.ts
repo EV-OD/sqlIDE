@@ -133,9 +133,9 @@ export const useAppStore = create<AppState>()(
               return files.map(f => {
                 if (f.id === file.parentId) {
                   return {
-                    ...f,
-                    children: [...(f.children || []), newFile],
-                    updatedAt: now,
+                    },
+                    {
+                      name: "sql-ide-storage",
                   };
                 }
                 if (f.children && f.children.length > 0) {
@@ -335,7 +335,7 @@ export const useAppStore = create<AppState>()(
       },
     }),
     {
-      name: "er-maker-storage",
+      name: "sql-ide-storage",
       partialize: (state) => ({
         connections: state.connections,
         projectFiles: state.projectFiles,

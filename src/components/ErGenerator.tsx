@@ -74,7 +74,7 @@ export default function ErGenerator() {
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem("er-maker-connections");
+    const saved = localStorage.getItem("sql-ide-connections");
     if (saved) {
       try {
         setSavedConnections(JSON.parse(saved));
@@ -83,7 +83,7 @@ export default function ErGenerator() {
       }
     }
 
-    const lastUsed = localStorage.getItem("er-maker-last-connection");
+    const lastUsed = localStorage.getItem("sql-ide-last-connection");
     if (lastUsed) {
       try {
         const conn = JSON.parse(lastUsed);
@@ -150,7 +150,7 @@ export default function ErGenerator() {
     }
 
     setSavedConnections(updated);
-    localStorage.setItem("er-maker-connections", JSON.stringify(updated));
+    localStorage.setItem("sql-ide-connections", JSON.stringify(updated));
     setIsSaveModalOpen(false);
     setActiveTab("saved");
   };
@@ -194,7 +194,7 @@ export default function ErGenerator() {
       theme: conn.theme || "default",
       curve: conn.curve || "basis",
     };
-    localStorage.setItem("er-maker-last-connection", JSON.stringify(lastUsed));
+    localStorage.setItem("sql-ide-last-connection", JSON.stringify(lastUsed));
 
     setActiveTab("database");
   };
@@ -202,7 +202,7 @@ export default function ErGenerator() {
   const deleteConnection = (id: string) => {
     const updated = savedConnections.filter((c) => c.id !== id);
     setSavedConnections(updated);
-    localStorage.setItem("er-maker-connections", JSON.stringify(updated));
+    localStorage.setItem("sql-ide-connections", JSON.stringify(updated));
   };
 
   // Load connection from app store (Connection Manager)
@@ -296,7 +296,7 @@ export default function ErGenerator() {
         theme: theme,
         curve: curve,
       };
-      localStorage.setItem("er-maker-last-connection", JSON.stringify(lastUsed));
+      localStorage.setItem("sql-ide-last-connection", JSON.stringify(lastUsed));
     }
 
     setLoading(true);
