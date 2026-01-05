@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ER Maker",
+  "productName": "SqlIde",
   "version": "0.1.0",
-  "identifier": "com.evod.ermaker",
+  "identifier": "com.evod.sqlide",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "ER Maker - Database Diagram Designer",
+        "title": "SqlIde - Database Diagram Designer",
         "width": 1280,
         "height": 800,
         "minWidth": 800,
@@ -38,8 +38,8 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "Create ER diagrams from databases and SQL",
-    "longDescription": "ER Maker is a powerful desktop application for creating Entity-Relationship diagrams. Connect to PostgreSQL, MySQL, or MariaDB databases to automatically generate ER diagrams, or write SQL to visualize your schema. Features include multiple diagram styles (Chen & Crow's Foot notation), SQL editor with syntax highlighting, and export to PNG/SVG.",
+    "shortDescription": "A powerful desktop application for SQL development and ER diagram generation",
+    "longDescription": "SqlIde is a powerful desktop application for SQL development and creating Entity-Relationship diagrams. Connect to PostgreSQL, MySQL, or MariaDB databases to automatically generate ER diagrams, or write SQL to visualize your schema. Features include multiple diagram styles (Chen & Crow's Foot notation), SQL editor with syntax highlighting, and export to PNG/SVG.",
     "copyright": "Copyright © 2026 EV-OD",
     "publisher": "EV-OD",
     "linux": {

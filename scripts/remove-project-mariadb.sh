@@ -15,16 +15,16 @@ case "$OS" in
     else
       BASE="$HOME/.local/share"
     fi
-    DEST="$BASE/er-maker/mariadb"
+    DEST="$BASE/sql-ide/mariadb"
     ;;
   Darwin)
     BASE="$HOME/Library/Application Support"
-    DEST="$BASE/er-maker/mariadb"
+    DEST="$BASE/sql-ide/mariadb"
     ;;
   MINGW*|MSYS*|CYGWIN*|Windows_NT)
     # Windows: prefer LOCALAPPDATA
     if [ -n "${LOCALAPPDATA:-}" ]; then
-      DEST="$LOCALAPPDATA/er-maker/mariadb"
+      DEST="$LOCALAPPDATA/sql-ide/mariadb"
     else
       echo "Windows detected but LOCALAPPDATA not set; please remove the folder manually." >&2
       exit 2

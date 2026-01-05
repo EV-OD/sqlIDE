@@ -25,7 +25,7 @@ if [ ! -d "$BUNDLE_DIR" ]; then
   exit 2
 fi
 
-DEST="$HOME/.local/share/er-maker/mariadb"
+DEST="$HOME/.local/share/sql-ide/mariadb"
 echo "Testing bundle install -> $DEST"
 
 rm -rf "$DEST"
@@ -39,8 +39,8 @@ if [ -f "$DEST/my.cnf.dist.template" ] && [ ! -f "$DEST/my.cnf" ]; then
   cp "$DEST/my.cnf.dist.template" "$DEST/my.cnf"
 fi
 
-LOG_INIT="/tmp/er-maker-mariadb-init.log"
-LOG_SERVER="/tmp/er-maker-mariadb-server.log"
+LOG_INIT="/tmp/sql-ide-mariadb-init.log"
+LOG_SERVER="/tmp/sql-ide-mariadb-server.log"
 
 echo "Running mariadb-install-db (logs -> $LOG_INIT)"
 "$DEST/bin/mariadb-install-db" --no-defaults --basedir="$DEST" --datadir="$DEST/data" \

@@ -35,7 +35,7 @@ export default function WelcomePage() {
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 mb-6 shadow-lg shadow-blue-500/25">
           <Database className="w-10 h-10 text-white" />
         </div>
-        <h1 className="text-4xl font-bold text-white mb-3">SQL Editor</h1>
+        <h1 className="text-4xl font-bold text-white mb-3">SqlIde</h1>
         <p className="text-zinc-400 text-lg max-w-md">
           A powerful SQL editor with database exploration and project management
         </p>

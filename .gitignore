@@ -53,8 +53,8 @@ src-tauri/bundled/mariadb/**/data/
 !src-tauri/bundled/**/.gitkeep
 
 # Local MariaDB runtime data created by the app
-.local/share/er-maker/mariadb/
-~/.local/share/er-maker/mariadb/
+.local/share/sql-ide/mariadb/
+~/.local/share/sql-ide/mariadb/
 
 # Do not commit extracted binary artifacts or runtime files
 **/mariadb.log
@@ -69,8 +69,8 @@ src-tauri/bundled/mariadb/**/data/
 *.zip
 
 # Local app data used by test scripts
-/home/*/.local/share/er-maker/
-~/.local/share/er-maker/
+/home/*/.local/share/sql-ide/
+~/.local/share/sql-ide/
 
 # Bundled binaries (avoid committing large vendor binaries to git)
 src-tauri/bundled/mariadb/**

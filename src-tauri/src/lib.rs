@@ -379,7 +379,7 @@ fn platform_folder_name() -> String {
 fn get_mariadb_dir() -> Result<PathBuf, String> {
     let data_dir = dirs::data_local_dir()
         .ok_or("failed to get local data directory")?
-        .join("er-maker");
+        .join("sql-ide");
     Ok(data_dir.join("mariadb"))
 }
 
@@ -488,7 +488,7 @@ async fn mariadb_install(handle: AppHandle) -> Result<String, String> {
 
     let data_dir = dirs::data_local_dir()
         .ok_or("failed to get local data directory")?
-        .join("er-maker");
+        .join("sql-ide");
     let dest = data_dir.join("mariadb");
     fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
 
@@ -537,7 +537,7 @@ async fn mariadb_install(handle: AppHandle) -> Result<String, String> {
 async fn mariadb_start(port: Option<u16>) -> Result<String, String> {
     let data_dir = dirs::data_local_dir()
         .ok_or("failed to get local data directory")?
-        .join("er-maker");
+        .join("sql-ide");
     let mariadb_dir = data_dir.join("mariadb");
     if !mariadb_dir.exists() {
         return Err("mariadb not installed; please run install first".into());

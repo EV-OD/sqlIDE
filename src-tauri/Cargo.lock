@@ -969,28 +969,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "er-maker-desktop"
-version = "0.1.0"
-dependencies = [
- "dirs 5.0.1",
- "once_cell",
- "regex",
- "serde",
- "serde_json",
- "sqlparser",
- "sqlx",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-opener",
- "thiserror 2.0.17",
- "tokio",
- "url",
- "whoami",
-]
-
-[[package]]
 name = "erased-serde"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3798,6 +3776,28 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der",
+]
+
+[[package]]
+name = "sql-ide-desktop"
+version = "0.1.0"
+dependencies = [
+ "dirs 5.0.1",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sqlparser",
+ "sqlx",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-opener",
+ "thiserror 2.0.17",
+ "tokio",
+ "url",
+ "whoami",
 ]
 
 [[package]]

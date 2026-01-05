@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    er_maker_desktop_lib::run()
+    sql_ide_desktop_lib::run()
 }

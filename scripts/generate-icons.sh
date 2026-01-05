@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ER Maker Desktop Icon Generator
+# SqlIde Desktop Icon Generator
 # Requires: imagemagick (convert), librsvg2-bin (rsvg-convert), icnsutils (png2icns)
 
 set -e
@@ -10,7 +10,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 ICONS_DIR="$PROJECT_DIR/src-tauri/icons"
 SVG_FILE="$SCRIPT_DIR/icon.svg"
 
-echo "=== ER Maker Desktop Icon Generator ==="
+echo "=== SqlIde Desktop Icon Generator ==="
 echo "Icons directory: $ICONS_DIR"
 
 # Create SVG icon - Database/ER diagram themed

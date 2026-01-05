@@ -1,7 +1,7 @@
-# ER Maker
+# SqlIde
 
 <p align="center">
-  <img src="scripts/icon.svg" alt="ER Maker Logo" width="128" height="128">
+  <img src="scripts/icon.svg" alt="SqlIde Logo" width="128" height="128">
 </p>
 
 <p align="center">

@@ -1,4 +1,4 @@
-# ER Maker - Release Preparation Guide
+# SqlIde - Release Preparation Guide
 
 ## Critical Issues & Solutions
 

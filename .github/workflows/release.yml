@@ -136,7 +136,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: er-maker-${{ matrix.os_name }}-${{ matrix.arch }}
+          name: sql-ide-${{ matrix.os_name }}-${{ matrix.arch }}
           path: |
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.rpm
@@ -184,7 +184,7 @@ jobs:
           draft: true
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
           generate_release_notes: true
-          name: 'ER Maker Desktop ${{ github.ref_name }}'
+          name: 'SqlIde Desktop ${{ github.ref_name }}'
           body: |
             ## Downloads
             

@@ -130,13 +130,13 @@ export const useAppStore = create<AppState>()(
           // If has parentId, we need to add it to the parent's children
           if (file.parentId) {
             const updateChildren = (files: ProjectFile[]): ProjectFile[] => {
-              return files.map(f => {
+              return files.map((f) => {
                 if (f.id === file.parentId) {
                   return {
-                    },
-                    {
-                      name: "sql-ide-storage",
-                  };
+                    ...f,
+                    children: [...(f.children || []), newFile],
+                    updatedAt: now,
+                  } as ProjectFile;
                 }
                 if (f.children && f.children.length > 0) {
                   return {
