@@ -46,10 +46,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Ensure bundled directory exists
+      - name: Ensure bundled directory exists (non-Windows)
+        if: runner.os != 'Windows'
         run: |
           # Some build scripts expect src-tauri/bundled to exist; create it if missing
           mkdir -p src-tauri/bundled/mariadb
+
+      - name: Ensure bundled directory exists (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $path = 'src-tauri\\bundled\\mariadb'
+          if (-not (Test-Path $path)) {
+            New-Item -ItemType Directory -Path $path | Out-Null
+            Write-Host "Created $path"
+          } else {
+            Write-Host "$path already exists"
+          }
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
