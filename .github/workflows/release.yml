@@ -99,21 +99,21 @@ jobs:
       - name: Prepare Monaco assets (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          mkdir -p bundled/monaco
+          mkdir -p src-tauri/bundled/monaco
 
           if [ -d "node_modules/monaco-editor/min/vs" ]; then
-            cp -r node_modules/monaco-editor/min/vs/* bundled/monaco/
-            echo "Copied monaco from node_modules/monaco-editor/min/vs to bundled/monaco"
+            cp -r node_modules/monaco-editor/min/vs/* src-tauri/bundled/monaco/
+            echo "Copied monaco from node_modules/monaco-editor/min/vs to src-tauri/bundled/monaco"
 
           elif [ -d "node_modules/monaco-editor/min" ]; then
             # Some installs may place files directly in min
-            cp -r node_modules/monaco-editor/min/* bundled/monaco/
-            echo "Copied monaco from node_modules/monaco-editor/min to bundled/monaco"
+            cp -r node_modules/monaco-editor/min/* src-tauri/bundled/monaco/
+            echo "Copied monaco from node_modules/monaco-editor/min to src-tauri/bundled/monaco"
 
           elif [ -d "src-tauri/bundled/monaco/vs" ]; then
             # Fallback: use any monaco already present under src-tauri (e.g., local dev copy)
-            cp -r src-tauri/bundled/monaco/vs/* bundled/monaco/
-            echo "Copied monaco from src-tauri/bundled/monaco to bundled/monaco"
+            cp -r src-tauri/bundled/monaco/vs/* src-tauri/bundled/monaco/
+            echo "Copied monaco from src-tauri/bundled/monaco/vs to src-tauri/bundled/monaco"
 
           else
             echo "Monaco not found locally. Attempting to download monaco-editor tarball from npm registry..."
@@ -129,8 +129,8 @@ jobs:
               mkdir -p /tmp/monaco_extract
               tar -xzf /tmp/monaco.tgz -C /tmp/monaco_extract
               if [ -d /tmp/monaco_extract/package/min/vs ]; then
-                cp -r /tmp/monaco_extract/package/min/vs/* bundled/monaco/
-                echo "Extracted monaco min/vs into bundled/monaco"
+                cp -r /tmp/monaco_extract/package/min/vs/* src-tauri/bundled/monaco/
+                echo "Extracted monaco min/vs into src-tauri/bundled/monaco"
               else
                 echo "Downloaded package did not contain min/vs; skipping"
               fi
@@ -146,12 +146,12 @@ jobs:
         run: |
           $src = 'node_modules\monaco-editor\min\vs'
           if (Test-Path $src) {
-            New-Item -ItemType Directory -Force -Path bundled\monaco | Out-Null
+            New-Item -ItemType Directory -Force -Path src-tauri\bundled\monaco | Out-Null
             # robocopy returns non-zero codes for successful copies; accept codes 0-3 as success
-            robocopy $src bundled\monaco /E /NFL /NDL /NJH /NJS /NC /NS
+            robocopy $src src-tauri\bundled\monaco /E /NFL /NDL /NJH /NJS /NC /NS
             $rc = $LASTEXITCODE
             if ($rc -le 3) {
-              Write-Host "Copied monaco from node_modules to bundled\\monaco (robocopy exit $rc)"
+              Write-Host "Copied monaco from node_modules to src-tauri\\bundled\\monaco (robocopy exit $rc)"
               exit 0
             } else {
               Write-Host "robocopy returned exit code $rc - attempting download fallback"
@@ -180,11 +180,11 @@ jobs:
             tar -xzf $env:TEMP\monaco.tgz -C $env:TEMP\monaco_extract
             $pkgPath = Join-Path $env:TEMP "monaco_extract\package\min\vs"
             if (Test-Path $pkgPath) {
-              New-Item -ItemType Directory -Force -Path bundled\\monaco | Out-Null
-              robocopy $pkgPath bundled\\monaco /E /NFL /NDL /NJH /NJS /NC /NS | Out-Null
+              New-Item -ItemType Directory -Force -Path src-tauri\\bundled\\monaco | Out-Null
+              robocopy $pkgPath src-tauri\\bundled\\monaco /E /NFL /NDL /NJH /NJS /NC /NS | Out-Null
               Remove-Item $env:TEMP\monaco.tgz -Force
               Remove-Item $env:TEMP\monaco_extract -Recurse -Force
-              Write-Host "Extracted monaco into bundled\\monaco"
+              Write-Host "Extracted monaco into src-tauri\\bundled\\monaco"
               exit 0
             } else {
               Write-Host "Downloaded package did not contain min/vs; continuing"
