@@ -96,6 +96,30 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
+      - name: Prepare Monaco assets (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          if [ -d node_modules/monaco-editor/min/vs ]; then
+            mkdir -p bundled/monaco
+            cp -r node_modules/monaco-editor/min/vs bundled/monaco
+            echo "Copied monaco from node_modules to bundled/monaco"
+          else
+            echo "monaco-editor not found in node_modules; ensure it's installed via package.json"
+          fi
+
+      - name: Prepare Monaco assets (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $src = 'node_modules\monaco-editor\min\vs'
+          if (Test-Path $src) {
+            New-Item -ItemType Directory -Force -Path bundled\monaco | Out-Null
+            robocopy $src bundled\monaco /E | Out-Null
+            Write-Host "Copied monaco from node_modules to bundled\\monaco"
+          } else {
+            Write-Host "monaco-editor not found in node_modules; ensure it's installed via package.json"
+          }
+
       - name: Download MariaDB minimal bundle (Linux only)
         if: matrix.os_name == 'linux'
         run: |
