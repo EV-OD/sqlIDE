@@ -81,7 +81,7 @@ export default function ConnectionManagerPage() {
       const dbType = data.dbType;
       const mode = data.connectionMode;
 
-      if ((dbType === "postgres" || dbType === "postgresql")) {
+      if (dbType === "postgresql") {
         // If using params mode, database field must be present
         if (mode === "params") {
           if (!data.database || data.database.trim() === "") {
@@ -130,7 +130,7 @@ export default function ConnectionManagerPage() {
     const values = getValues();
 
     // For Postgres require DB name
-    if ((values.dbType === "postgres" || values.dbType === "postgresql")) {
+    if (values.dbType === "postgresql") {
       if (values.connectionMode === "params") {
         if (!values.database || values.database.trim() === "") {
           setTestResult({ status: "error", message: "Database name is required for PostgreSQL." });
