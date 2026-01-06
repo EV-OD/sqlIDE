@@ -39,7 +39,15 @@
     "mariadb:package": "bash scripts/package-minimal-mariadb.sh src-tauri/bundled/mariadb/linux-x86_64 mariadb-linux-x86_64-minimal-10.6.24.tar.xz",
     "mariadb:test-install": "bash scripts/test-bundle-install.sh",
     "mariadb:build": "pnpm run mariadb:prune && pnpm run mariadb:package",
-    "mariadb:remove": "bash scripts/remove-project-mariadb.sh"
+    "mariadb:remove": "bash scripts/remove-project-mariadb.sh",
+
+    "tag:recreate-latest": "bash scripts/git-tags.sh recreate-latest",
+
+    "tag:new:patch": "bash scripts/git-tags.sh new:patch",
+
+    "tag:new:bug": "bash scripts/git-tags.sh new:bug",
+
+    "tag:new:feature": "bash scripts/git-tags.sh new:feature"
   },
   "dependencies": {
     "@mermaid-js/mermaid-cli": "^11.12.0",
