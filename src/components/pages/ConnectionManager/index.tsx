@@ -76,18 +76,83 @@ export default function ConnectionManagerPage() {
   };
 
   const onSubmit = (data: ConnectionFormData) => {
-    if (editingId) {
-      updateConnection(editingId, data);
-    } else {
-      addConnection(data);
-    }
-    closeForm();
+    const save = async () => {
+      // For Postgres require a database name
+      const dbType = data.dbType;
+      const mode = data.connectionMode;
+
+      if ((dbType === "postgres" || dbType === "postgresql")) {
+        // If using params mode, database field must be present
+        if (mode === "params") {
+          if (!data.database || data.database.trim() === "") {
+            setTestResult({ status: "error", message: "Database name is required for PostgreSQL." });
+            return;
+          }
+        } else {
+          // connection string mode: try to parse URL path
+          try {
+            const url = new URL(data.connectionString || "");
+            const db = url.pathname.replace(/^\//, "");
+            if (!db) {
+              setTestResult({ status: "error", message: "Connection string must include a database for PostgreSQL." });
+              return;
+            }
+          } catch (e) {
+            setTestResult({ status: "error", message: "Invalid connection string." });
+            return;
+          }
+        }
+      }
+
+      // Test connection before saving
+      setTestResult({ status: "testing" });
+      try {
+        // Add a temporary id for testing API shape
+        const tempConn = { ...(data as any), id: editingId || "temp" } as unknown as SavedConnection;
+        const msg = await testConnection(tempConn);
+        setTestResult({ status: "success", message: msg });
+
+        if (editingId) {
+          updateConnection(editingId, data);
+        } else {
+          addConnection(data);
+        }
+        closeForm();
+      } catch (err) {
+        setTestResult({ status: "error", message: err instanceof Error ? err.message : String(err) });
+      }
+    };
+
+    void save();
   };
 
   const handleTestConnection = async () => {
     const values = getValues();
+
+    // For Postgres require DB name
+    if ((values.dbType === "postgres" || values.dbType === "postgresql")) {
+      if (values.connectionMode === "params") {
+        if (!values.database || values.database.trim() === "") {
+          setTestResult({ status: "error", message: "Database name is required for PostgreSQL." });
+          return;
+        }
+      } else {
+        try {
+          const url = new URL(values.connectionString || "");
+          const db = url.pathname.replace(/^\//, "");
+          if (!db) {
+            setTestResult({ status: "error", message: "Connection string must include a database for PostgreSQL." });
+            return;
+          }
+        } catch (e) {
+          setTestResult({ status: "error", message: "Invalid connection string." });
+          return;
+        }
+      }
+    }
+
     setTestResult({ status: "testing" });
-    
+
     try {
       const message = await testConnection({
         ...values,

@@ -1,6 +1,8 @@
 use sqlx::mysql::MySqlPoolOptions;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Column as _, Row};
+use sqlparser::dialect::{MySqlDialect, PostgreSqlDialect, GenericDialect};
+use sqlparser::parser::Parser;
 
 use crate::types::{Column, ColumnInfo, ConnectionParams, DatabaseInfo, QueryResult, Schema, Table, TableInfo};
 
@@ -682,70 +684,88 @@ pub async fn execute_postgres_query(connection_string: &str, query: &str) -> Res
         .await
         .map_err(|e| format!("Connection failed: {}", e))?;
     
-    let rows = sqlx::query(query)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| format!("Query failed: {}", e))?;
-    
-    let execution_time = start_time.elapsed().as_millis() as u64;
-    
-    if rows.is_empty() {
-        pool.close().await;
-        return Ok(QueryResult {
-            columns: vec![],
-            rows: vec![],
-            row_count: 0,
-            execution_time,
-            error: None,
-        });
-    }
-    
-    let columns: Vec<String> = rows[0]
-        .columns()
-        .iter()
-        .map(|c| c.name().to_string())
-        .collect();
-    
-    let result_rows: Vec<serde_json::Value> = rows
-        .iter()
-        .map(|row| {
-            let mut obj = serde_json::Map::new();
-            for (i, col) in columns.iter().enumerate() {
-                let value: serde_json::Value = if let Ok(v) = row.try_get::<i64, _>(i) {
-                    serde_json::Value::Number(v.into())
-                } else if let Ok(v) = row.try_get::<i32, _>(i) {
-                    serde_json::Value::Number(v.into())
-                } else if let Ok(v) = row.try_get::<f64, _>(i) {
-                    serde_json::json!(v)
-                } else if let Ok(v) = row.try_get::<bool, _>(i) {
-                    serde_json::Value::Bool(v)
-                } else if let Ok(v) = row.try_get::<String, _>(i) {
-                    serde_json::Value::String(v)
-                } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
-                    v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
-                } else if let Ok(v) = row.try_get::<Option<i32>, _>(i) {
-                    v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
-                } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
-                    v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
-                } else if let Ok(v) = row.try_get::<Option<bool>, _>(i) {
-                    v.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null)
-                } else if let Ok(v) = row.try_get::<Option<String>, _>(i) {
-                    v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
+    // Parse SQL into statements so we can execute multiple statements (e.g. "USE db; SELECT ...;")
+    let dialect = PostgreSqlDialect {};
+    let statements = Parser::parse_sql(&dialect, query)
+        .map_err(|e| format!("Failed to parse SQL: {}", e))?;
+
+    let mut last_columns: Vec<String> = vec![];
+    let mut last_result_rows: Vec<serde_json::Value> = vec![];
+
+    for stmt in statements {
+        let sql = stmt.to_string();
+
+        match stmt {
+            sqlparser::ast::Statement::Query(_) => {
+                // SELECT / Query - fetch rows and treat as last result
+                let rows = sqlx::query(&sql)
+                    .fetch_all(&pool)
+                    .await
+                    .map_err(|e| format!("Query failed: {}", e))?;
+
+                if !rows.is_empty() {
+                    last_columns = rows[0]
+                        .columns()
+                        .iter()
+                        .map(|c| c.name().to_string())
+                        .collect();
+
+                    last_result_rows = rows
+                        .iter()
+                        .map(|row| {
+                            let mut obj = serde_json::Map::new();
+                            for (i, col) in last_columns.iter().enumerate() {
+                                let value: serde_json::Value = if let Ok(v) = row.try_get::<i64, _>(i) {
+                                    serde_json::Value::Number(v.into())
+                                } else if let Ok(v) = row.try_get::<i32, _>(i) {
+                                    serde_json::Value::Number(v.into())
+                                } else if let Ok(v) = row.try_get::<f64, _>(i) {
+                                    serde_json::json!(v)
+                                } else if let Ok(v) = row.try_get::<bool, _>(i) {
+                                    serde_json::Value::Bool(v)
+                                } else if let Ok(v) = row.try_get::<String, _>(i) {
+                                    serde_json::Value::String(v)
+                                } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
+                                    v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
+                                } else if let Ok(v) = row.try_get::<Option<i32>, _>(i) {
+                                    v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
+                                } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
+                                    v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
+                                } else if let Ok(v) = row.try_get::<Option<bool>, _>(i) {
+                                    v.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null)
+                                } else if let Ok(v) = row.try_get::<Option<String>, _>(i) {
+                                    v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
+                                } else {
+                                    serde_json::Value::Null
+                                };
+                                obj.insert(col.clone(), value);
+                            }
+                            serde_json::Value::Object(obj)
+                        })
+                        .collect();
                 } else {
-                    serde_json::Value::Null
-                };
-                obj.insert(col.clone(), value);
+                    last_columns = vec![];
+                    last_result_rows = vec![];
+                }
             }
-            serde_json::Value::Object(obj)
-        })
-        .collect();
-    
-    let row_count = result_rows.len();
+            _ => {
+                // Non-query statements (CREATE, USE, INSERT, UPDATE, etc.) - execute and ignore results
+                sqlx::query(&sql)
+                    .execute(&pool)
+                    .await
+                    .map_err(|e| format!("Statement execution failed: {}", e))?;
+            }
+        }
+    }
+
+    let execution_time = start_time.elapsed().as_millis() as u64;
     pool.close().await;
-    
+
+    let row_count = last_result_rows.len();
+
     Ok(QueryResult {
-        columns,
-        rows: result_rows,
+        columns: last_columns,
+        rows: last_result_rows,
         row_count,
         execution_time,
         error: None,
@@ -761,70 +781,86 @@ pub async fn execute_mysql_query(connection_string: &str, query: &str) -> Result
         .await
         .map_err(|e| format!("Connection failed: {}", e))?;
     
-    let rows = sqlx::query(query)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| format!("Query failed: {}", e))?;
-    
-    let execution_time = start_time.elapsed().as_millis() as u64;
-    
-    if rows.is_empty() {
-        pool.close().await;
-        return Ok(QueryResult {
-            columns: vec![],
-            rows: vec![],
-            row_count: 0,
-            execution_time,
-            error: None,
-        });
-    }
-    
-    let columns: Vec<String> = rows[0]
-        .columns()
-        .iter()
-        .map(|c| c.name().to_string())
-        .collect();
-    
-    let result_rows: Vec<serde_json::Value> = rows
-        .iter()
-        .map(|row| {
-            let mut obj = serde_json::Map::new();
-            for (i, col) in columns.iter().enumerate() {
-                let value: serde_json::Value = if let Ok(v) = row.try_get::<i64, _>(i) {
-                    serde_json::Value::Number(v.into())
-                } else if let Ok(v) = row.try_get::<i32, _>(i) {
-                    serde_json::Value::Number(v.into())
-                } else if let Ok(v) = row.try_get::<f64, _>(i) {
-                    serde_json::json!(v)
-                } else if let Ok(v) = row.try_get::<bool, _>(i) {
-                    serde_json::Value::Bool(v)
-                } else if let Ok(v) = row.try_get::<String, _>(i) {
-                    serde_json::Value::String(v)
-                } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
-                    v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
-                } else if let Ok(v) = row.try_get::<Option<i32>, _>(i) {
-                    v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
-                } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
-                    v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
-                } else if let Ok(v) = row.try_get::<Option<bool>, _>(i) {
-                    v.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null)
-                } else if let Ok(v) = row.try_get::<Option<String>, _>(i) {
-                    v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
+    // Parse SQL into statements so we can execute multiple statements (e.g. "USE db; SELECT ...;")
+    let dialect = MySqlDialect {};
+    let statements = Parser::parse_sql(&dialect, query)
+        .map_err(|e| format!("Failed to parse SQL: {}", e))?;
+
+    let mut last_columns: Vec<String> = vec![];
+    let mut last_result_rows: Vec<serde_json::Value> = vec![];
+
+    for stmt in statements {
+        let sql = stmt.to_string();
+
+        match stmt {
+            sqlparser::ast::Statement::Query(_) => {
+                let rows = sqlx::query(&sql)
+                    .fetch_all(&pool)
+                    .await
+                    .map_err(|e| format!("Query failed: {}", e))?;
+
+                if !rows.is_empty() {
+                    last_columns = rows[0]
+                        .columns()
+                        .iter()
+                        .map(|c| c.name().to_string())
+                        .collect();
+
+                    last_result_rows = rows
+                        .iter()
+                        .map(|row| {
+                            let mut obj = serde_json::Map::new();
+                            for (i, col) in last_columns.iter().enumerate() {
+                                let value: serde_json::Value = if let Ok(v) = row.try_get::<i64, _>(i) {
+                                    serde_json::Value::Number(v.into())
+                                } else if let Ok(v) = row.try_get::<i32, _>(i) {
+                                    serde_json::Value::Number(v.into())
+                                } else if let Ok(v) = row.try_get::<f64, _>(i) {
+                                    serde_json::json!(v)
+                                } else if let Ok(v) = row.try_get::<bool, _>(i) {
+                                    serde_json::Value::Bool(v)
+                                } else if let Ok(v) = row.try_get::<String, _>(i) {
+                                    serde_json::Value::String(v)
+                                } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
+                                    v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
+                                } else if let Ok(v) = row.try_get::<Option<i32>, _>(i) {
+                                    v.map(|n| serde_json::Value::Number(n.into())).unwrap_or(serde_json::Value::Null)
+                                } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
+                                    v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
+                                } else if let Ok(v) = row.try_get::<Option<bool>, _>(i) {
+                                    v.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null)
+                                } else if let Ok(v) = row.try_get::<Option<String>, _>(i) {
+                                    v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
+                                } else {
+                                    serde_json::Value::Null
+                                };
+                                obj.insert(col.clone(), value);
+                            }
+                            serde_json::Value::Object(obj)
+                        })
+                        .collect();
                 } else {
-                    serde_json::Value::Null
-                };
-                obj.insert(col.clone(), value);
+                    last_columns = vec![];
+                    last_result_rows = vec![];
+                }
             }
-            serde_json::Value::Object(obj)
-        })
-        .collect();
-    
-    let row_count = result_rows.len();
+            _ => {
+                sqlx::query(&sql)
+                    .execute(&pool)
+                    .await
+                    .map_err(|e| format!("Statement execution failed: {}", e))?;
+            }
+        }
+    }
+
+    let execution_time = start_time.elapsed().as_millis() as u64;
     pool.close().await;
-    
+
+    let row_count = last_result_rows.len();
+
     Ok(QueryResult {
-        columns,
-        rows: result_rows,
+        columns: last_columns,
+        rows: last_result_rows,
         row_count,
         execution_time,
         error: None,
