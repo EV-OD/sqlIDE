@@ -198,16 +198,20 @@ jobs:
       - name: Download MariaDB minimal bundle (Linux only)
         if: matrix.os_name == 'linux'
         run: |
-          set -e
+          set -euo pipefail
           mkdir -p src-tauri/bundled/mariadb
-          URL="https://github.com/EV-OD/sqlIDE/releases/download/mariadb-bundles-v1/mariadb-linux-x86_64-minimal-10.6.24.tar.xz"
-          echo "Attempting to download MariaDB bundle from $URL"
-          if curl -fL "$URL" -o /tmp/mariadb.tar.xz; then
-            echo "Downloaded MariaDB bundle, extracting..."
+          # Primary location: project releases (maintainers should upload the minimal bundle there)
+          URL_GH="https://github.com/EV-OD/sqlIDE/releases/download/mariadb-bundles-v1/mariadb-linux-x86_64-minimal-10.6.24.tar.xz"
+          echo "Attempting to download MariaDB bundle from $URL_GH"
+          if curl -fL "$URL_GH" -o /tmp/mariadb.tar.xz; then
+            echo "Downloaded MariaDB bundle from project release, extracting..."
             tar -xJf /tmp/mariadb.tar.xz -C src-tauri/bundled/mariadb
             echo "Extraction complete"
           else
-            echo "MariaDB bundle not found at $URL - continuing without offline MariaDB (CI will build without it)"
+            echo "ERROR: MariaDB bundle not available at $URL_GH"
+            echo "This CI job requires the MariaDB minimal bundle to be present so the generated .deb includes offline MariaDB."
+            echo "Please attach the file 'mariadb-linux-x86_64-minimal-10.6.24.tar.xz' to the release or update the URL."
+            exit 1
           fi
 
       - name: Build frontend
