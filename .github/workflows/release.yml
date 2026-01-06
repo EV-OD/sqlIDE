@@ -116,7 +116,28 @@ jobs:
             echo "Copied monaco from src-tauri/bundled/monaco to bundled/monaco"
 
           else
-            echo "Warning: Monaco not found in expected locations (node_modules or src-tauri). Continuing without Monaco. Packaging may fail if Monaco is required."
+            echo "Monaco not found locally. Attempting to download monaco-editor tarball from npm registry..."
+            # Try to determine requested version from package.json (strip ^/~)
+            VER=$(node -e "const p=require('./package.json').dependencies && require('./package.json').dependencies['monaco-editor'] || require('./package.json').devDependencies && require('./package.json').devDependencies['monaco-editor'] || '0.0.0'; console.log((p||'').replace(/^[^0-9]*/,''))")
+            if [ -z "$VER" ] || [ "$VER" = "0.0.0" ]; then
+              echo "Could not determine monaco version from package.json; defaulting to 0.55.1"
+              VER=0.55.1
+            fi
+            URL="https://registry.npmjs.org/monaco-editor/-/monaco-editor-$VER.tgz"
+            echo "Downloading $URL"
+            if curl -fL "$URL" -o /tmp/monaco.tgz; then
+              mkdir -p /tmp/monaco_extract
+              tar -xzf /tmp/monaco.tgz -C /tmp/monaco_extract
+              if [ -d /tmp/monaco_extract/package/min/vs ]; then
+                cp -r /tmp/monaco_extract/package/min/vs/* bundled/monaco/
+                echo "Extracted monaco min/vs into bundled/monaco"
+              else
+                echo "Downloaded package did not contain min/vs; skipping"
+              fi
+              rm -rf /tmp/monaco.tgz /tmp/monaco_extract
+            else
+              echo "Failed to download monaco tarball from $URL; continuing without Monaco (packaging may fail)"
+            fi
           fi
 
       - name: Prepare Monaco assets (Windows)
