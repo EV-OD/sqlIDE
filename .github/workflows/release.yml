@@ -99,12 +99,24 @@ jobs:
       - name: Prepare Monaco assets (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          if [ -d node_modules/monaco-editor/min/vs ]; then
-            mkdir -p bundled/monaco
-            cp -r node_modules/monaco-editor/min/vs bundled/monaco
-            echo "Copied monaco from node_modules to bundled/monaco"
+          mkdir -p bundled/monaco
+
+          if [ -d "node_modules/monaco-editor/min/vs" ]; then
+            cp -r node_modules/monaco-editor/min/vs/* bundled/monaco/
+            echo "Copied monaco from node_modules/monaco-editor/min/vs to bundled/monaco"
+
+          elif [ -d "node_modules/monaco-editor/min" ]; then
+            # Some installs may place files directly in min
+            cp -r node_modules/monaco-editor/min/* bundled/monaco/
+            echo "Copied monaco from node_modules/monaco-editor/min to bundled/monaco"
+
+          elif [ -d "src-tauri/bundled/monaco/vs" ]; then
+            # Fallback: use any monaco already present under src-tauri (e.g., local dev copy)
+            cp -r src-tauri/bundled/monaco/vs/* bundled/monaco/
+            echo "Copied monaco from src-tauri/bundled/monaco to bundled/monaco"
+
           else
-            echo "monaco-editor not found in node_modules; ensure it's installed via package.json"
+            echo "Warning: Monaco not found in expected locations (node_modules or src-tauri). Continuing without Monaco. Packaging may fail if Monaco is required."
           fi
 
       - name: Prepare Monaco assets (Windows)
