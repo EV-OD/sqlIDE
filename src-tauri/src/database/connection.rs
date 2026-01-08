@@ -366,8 +366,9 @@ pub async fn get_postgres_databases(connection_string: &str) -> Result<Vec<Datab
     
     pool.close().await;
     
+    // Return the actual database name (Postgres uses "public" as a schema)
     Ok(vec![DatabaseInfo {
-        name: "public".to_string(),
+        name: specified_db.clone(),
         tables,
     }])
 }
