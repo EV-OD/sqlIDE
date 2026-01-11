@@ -1,7 +1,7 @@
 use sqlx::mysql::MySqlPoolOptions;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Column as _, Row};
-use sqlparser::dialect::{MySqlDialect, PostgreSqlDialect, GenericDialect};
+use sqlparser::dialect::{MySqlDialect, PostgreSqlDialect};
 use sqlparser::parser::Parser;
 
 use crate::types::{Column, ColumnInfo, ConnectionParams, DatabaseInfo, QueryResult, Schema, Table, TableInfo};
@@ -106,6 +106,8 @@ pub async fn get_postgres_schema(connection_string: &str) -> Result<Schema, Stri
             foreign_key_target_column: None,
             is_multivalued: false,
             is_derived: false,
+            cardinality_source: None,
+            cardinality_target: None,
         });
     }
 
@@ -223,6 +225,8 @@ pub async fn get_mysql_schema(connection_string: &str) -> Result<Schema, String>
             foreign_key_target_column: None,
             is_multivalued: false,
             is_derived: false,
+            cardinality_source: None,
+            cardinality_target: None,
         });
     }
 

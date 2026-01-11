@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Loader2, AlertCircle, RefreshCw, Layers, Spline } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Layers, Spline, Shuffle } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../../store/useAppStore";
 import MermaidDiagram from "../MermaidDiagram";
@@ -29,6 +29,7 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
   const style = tab.diagramStyle || diagramSettings.style;
   const theme = tab.diagramTheme || diagramSettings.theme;
   const curve = tab.diagramCurve || diagramSettings.curve;
+  const randomize = tab.diagramRandomize ?? diagramSettings.randomize ?? false;
   const background = tab.diagramBackground || diagramSettings.background;
 
   const buildConnectionString = (conn: SavedConnection, dbName?: string): string => {
@@ -81,6 +82,7 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
         config: {
           theme,
           curve,
+          randomize,
         },
       };
 
@@ -105,7 +107,7 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
       const newCode = await invoke<string>("generate_mermaid", {
         schema: newSchema,
         style,
-        config: { theme, curve },
+        config: { theme, curve, randomize },
       });
       setMermaidCode(newCode);
       setSchema(newSchema);
@@ -118,7 +120,7 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
     }
   };
 
-  const handleUpdateAttribute = async (updates: { isDerived?: boolean; isMultivalued?: boolean }) => {
+  const handleUpdateAttribute = async (updates: { isDerived?: boolean; isMultivalued?: boolean; cardinalitySource?: string; cardinalityTarget?: string }) => {
     if (!schema || !contextMenu) return;
     
     // Helper to match ID
@@ -130,12 +132,15 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
     let found = false;
     for (const table of newSchema.tables) {
         for (const col of table.columns) {
-            const id = `A_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
+            const attrId = `A_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
+            const relId = `R_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
             
-            // Check matches
-            if (id === contextMenu.id) {
+            // Check matches for both Attribute and Relationship
+            if (attrId === contextMenu.id || relId === contextMenu.id) {
                 if (updates.isDerived !== undefined) col.isDerived = updates.isDerived;
                 if (updates.isMultivalued !== undefined) col.isMultivalued = updates.isMultivalued;
+                if (updates.cardinalitySource !== undefined) col.cardinalitySource = updates.cardinalitySource;
+                if (updates.cardinalityTarget !== undefined) col.cardinalityTarget = updates.cardinalityTarget;
                 found = true;
                 break;
             }
@@ -167,7 +172,7 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
     } else if (connection && mermaidCode) {
       generateDiagram();
     }
-  }, [style, theme, curve]);
+  }, [style, theme, curve, randomize]);
 
   // Close context menu on global click
   useEffect(() => {
@@ -187,23 +192,30 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
     // Try finding exact match first
     for (const table of schema.tables) {
         for (const col of table.columns) {
-            const id = `A_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
-            if (id === contextMenu.id) return col;
+            const attrId = `A_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
+            const relId = `R_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
+
+            if (attrId === contextMenu.id || relId === contextMenu.id) return { col, type: attrId === contextMenu.id ? 'attribute' : 'relationship' };
         }
     }
     
     // Fallback: Try match based on endsWith if mermaid added prefixes
     for (const table of schema.tables) {
         for (const col of table.columns) {
-            const id = `A_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
-            if (contextMenu.id.endsWith(id) || contextMenu.id.includes(id)) return col;
+            const attrId = `A_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
+            const relId = `R_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
+            
+            if (contextMenu.id.endsWith(attrId) || contextMenu.id.includes(attrId)) return { col, type: 'attribute' };
+            if (contextMenu.id.endsWith(relId) || contextMenu.id.includes(relId)) return { col, type: 'relationship' };
         }
     }
 
     return null;
   };
 
-  const selectedCol = getSelectedColumn();
+  const selection = getSelectedColumn();
+  const selectedCol = selection?.col;
+  const selectionType = selection?.type;
   
   // Debug effect
   // useEffect(() => {
@@ -231,6 +243,13 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
           <span className="text-zinc-500">{connection.dbType}</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => updateEditorTab(tab.id, { diagramRandomize: !randomize })}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors ${randomize ? "bg-purple-600/20 text-purple-400" : "bg-zinc-800 text-zinc-400 hover:text-zinc-300"}`}
+            title="Randomize Attribute Layout"
+          >
+            <Shuffle className="w-4 h-4" />
+          </button>
           <button
             onClick={generateDiagram}
             disabled={loading}
@@ -300,30 +319,65 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
                 <>
                 <div className="px-3 py-2 border-b border-zinc-700 mb-1">
                     <span className="text-sm font-medium text-white block truncate">{selectedCol.name}</span>
-                    <span className="text-xs text-zinc-500 block truncate">{selectedCol.type}</span>
+                    <span className="text-xs text-zinc-500 block truncate">{selectionType === 'relationship' ? 'Relationship' : selectedCol.type}</span>
                 </div>
-                <button 
-                    onClick={() => handleUpdateAttribute({ isDerived: !selectedCol.isDerived })}
-                    className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 flex items-center gap-2"
-                >
-                    <div className={`w-4 h-4 border rounded flex items-center justify-center ${selectedCol.isDerived ? "bg-purple-600 border-purple-600" : "border-zinc-500"}`}>
-                        {selectedCol.isDerived && <Layers className="w-3 h-3 text-white" />}
-                    </div>
-                    Is Derived (Dashed)
-                </button>
-                <button 
-                    onClick={() => handleUpdateAttribute({ isMultivalued: !selectedCol.isMultivalued })}
-                    className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 flex items-center gap-2"
-                >
-                    <div className={`w-4 h-4 border rounded flex items-center justify-center ${selectedCol.isMultivalued ? "bg-purple-600 border-purple-600" : "border-zinc-500"}`}>
-                        {selectedCol.isMultivalued && <Spline className="w-3 h-3 text-white" />}
-                    </div>
-                    Is Multivalued (Double)
-                </button>
+                
+                {selectionType === 'attribute' && (
+                    <>
+                    <button 
+                        onClick={() => handleUpdateAttribute({ isDerived: !selectedCol.isDerived })}
+                        className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 flex items-center gap-2"
+                    >
+                        <div className={`w-4 h-4 border rounded flex items-center justify-center ${selectedCol.isDerived ? "bg-purple-600 border-purple-600" : "border-zinc-500"}`}>
+                            {selectedCol.isDerived && <Layers className="w-3 h-3 text-white" />}
+                        </div>
+                        Is Derived (Dashed)
+                    </button>
+                    <button 
+                        onClick={() => handleUpdateAttribute({ isMultivalued: !selectedCol.isMultivalued })}
+                        className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 flex items-center gap-2"
+                    >
+                        <div className={`w-4 h-4 border rounded flex items-center justify-center ${selectedCol.isMultivalued ? "bg-purple-600 border-purple-600" : "border-zinc-500"}`}>
+                            {selectedCol.isMultivalued && <Spline className="w-3 h-3 text-white" />}
+                        </div>
+                        Is Multivalued (Double)
+                    </button>
+                    </>
+                )}
+
+                {selectionType === 'relationship' && (
+                    <>
+                     <div className="px-3 py-1 text-xs text-zinc-500 font-medium">Source Cardinality</div>
+                     <div className="flex px-2 pb-2 gap-1">
+                        {['1', 'N'].map((c) => (
+                            <button
+                                key={c}
+                                onClick={() => handleUpdateAttribute({ cardinalitySource: c })}
+                                className={`flex-1 py-1 text-xs rounded border ${selectedCol.cardinalitySource === c || (!selectedCol.cardinalitySource && c === 'N') ? 'bg-purple-600 border-purple-600 text-white' : 'border-zinc-600 text-zinc-400 hover:bg-zinc-700'}`}
+                            >
+                                {c}
+                            </button>
+                        ))}
+                     </div>
+
+                     <div className="px-3 py-1 text-xs text-zinc-500 font-medium">Target Cardinality</div>
+                     <div className="flex px-2 pb-2 gap-1">
+                        {['1', 'N'].map((c) => (
+                            <button
+                                key={c}
+                                onClick={() => handleUpdateAttribute({ cardinalityTarget: c })}
+                                className={`flex-1 py-1 text-xs rounded border ${selectedCol.cardinalityTarget === c || (!selectedCol.cardinalityTarget && c === '1') ? 'bg-purple-600 border-purple-600 text-white' : 'border-zinc-600 text-zinc-400 hover:bg-zinc-700'}`}
+                            >
+                                {c}
+                            </button>
+                        ))}
+                     </div>
+                    </>
+                )}
                 </>
             ) : (
                 <div className="px-3 py-2 text-sm text-zinc-400">
-                    No attribute selected ({contextMenu.id})
+                    No item selected ({contextMenu.id})
                 </div>
             )}
         </div>

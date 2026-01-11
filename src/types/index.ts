@@ -7,6 +7,8 @@ export interface Column {
   foreignKeyTargetColumn?: string;
   isMultivalued?: boolean;
   isDerived?: boolean;
+  cardinalitySource?: string;
+  cardinalityTarget?: string;
 }
 
 export interface Table {
@@ -21,6 +23,7 @@ export interface Schema {
 export interface MermaidConfig {
   theme?: string;
   curve?: string;
+  randomize?: boolean;
 }
 
 export interface GenerateRequest {
@@ -130,6 +133,7 @@ export interface EditorTab {
   diagramStyle?: DiagramStyle;
   diagramTheme?: string;
   diagramCurve?: string;
+  diagramRandomize?: boolean;
   diagramBackground?: string;
   schema?: Schema;
 }
@@ -139,6 +143,7 @@ export interface DiagramSettings {
   style: DiagramStyle;
   theme: string;
   curve: string;
+  randomize: boolean;
   background: string;
 }
 

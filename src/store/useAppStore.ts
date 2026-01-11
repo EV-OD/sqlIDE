@@ -287,6 +287,7 @@ export const useAppStore = create<AppState>()(
         style: "chen",
         theme: "default",
         curve: "basis",
+        randomize: false,
         background: "light",
       },
       setDiagramSettings: (settings) =>
@@ -328,6 +329,7 @@ export const useAppStore = create<AppState>()(
               style: connection.style || "chen",
               theme: connection.theme || "default",
               curve: connection.curve || "basis",
+              randomize: false,
               background: "light",
             },
           };

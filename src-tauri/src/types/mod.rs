@@ -18,6 +18,10 @@ pub struct Column {
     pub is_multivalued: bool,
     #[serde(rename = "isDerived", default)]
     pub is_derived: bool,
+    #[serde(rename = "cardinalitySource")]
+    pub cardinality_source: Option<String>,
+    #[serde(rename = "cardinalityTarget")]
+    pub cardinality_target: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +39,7 @@ pub struct Schema {
 pub struct MermaidConfig {
     pub theme: Option<String>,
     pub curve: Option<String>,
+    pub randomize: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

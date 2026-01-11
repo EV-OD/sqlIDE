@@ -29,6 +29,7 @@ async fn generate_diagram(request: GenerateRequest) -> Result<GenerateResponse, 
     let config = request.config.unwrap_or(MermaidConfig {
         theme: Some("default".to_string()),
         curve: Some("basis".to_string()),
+        randomize: Some(false),
     });
 
     let schema = if request.db_type == "sql" {
@@ -57,6 +58,7 @@ fn generate_mermaid(schema: Schema, style: Option<String>, config: Option<Mermai
     let config = config.unwrap_or(MermaidConfig {
         theme: Some("default".to_string()),
         curve: Some("basis".to_string()),
+        randomize: Some(false),
     });
     generate_mermaid_code(&schema, style, &config)
 }
@@ -672,7 +674,7 @@ async fn mariadb_start(port: Option<u16>) -> Result<String, String> {
         .open(&server_log)
         .map_err(|e| e.to_string())?;
 
-    let mut child = Command::new(&mariadbd)
+    let child = Command::new(&mariadbd)
         .current_dir(&mariadb_dir)
         .arg(format!("--defaults-file={}", mycnf.display()))
         .arg(format!("--basedir={}", mariadb_dir.display()))

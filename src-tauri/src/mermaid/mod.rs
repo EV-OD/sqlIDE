@@ -91,7 +91,7 @@ pub fn generate_crows_foot(schema: &Schema) -> String {
     code
 }
 
-pub fn generate_chen(schema: &Schema, theme: &str) -> String {
+pub fn generate_chen(schema: &Schema, theme: &str, randomize: bool) -> String {
     let mut code = String::from("flowchart TD\n");
 
     let (entity_color, attribute_color, relationship_color) = get_theme_colors(theme);
@@ -131,27 +131,51 @@ pub fn generate_chen(schema: &Schema, theme: &str) -> String {
             // We'll trust the frontend config to matching the click availability.
             code.push_str(&format!("    click {} callback \"Edit Attribute\"\n", attr_id));
             
-            code.push_str(&format!("    {} --- {}\n", entity_id, attr_id));
+            // Distribute attributes around the entity by alternating direction if randomize is true
+            let hash = col.name.len() + table.name.len(); 
+            if randomize && hash % 4 == 0 {
+                 // Top
+                 code.push_str(&format!("    {} --- {}\n", attr_id, entity_id));
+            } else if randomize && hash % 4 == 1 {
+                 // Bottom
+                 code.push_str(&format!("    {} --- {}\n", entity_id, attr_id));
+            } else if randomize && hash % 4 == 2 {
+                 // Left
+                 code.push_str(&format!("    {} --- {}\n", attr_id, entity_id));
+            } else if randomize && hash % 4 == 3 {
+                 // Right
+                 code.push_str(&format!("    {} --- {}\n", entity_id, attr_id));
+            } else {
+                 // Default direction (Bottom)
+                 code.push_str(&format!("    {} --- {}\n", entity_id, attr_id));
+            }
         }
     }
 
-    // Relationships
-    let mut rel_counter = 0;
+    // Relationships - Always Standard Direction logic (Source ---|N| Rel ---|1| Target)
+    // We do NOT randomize this part.
+    // let mut rel_counter = 0; // Removing counter in favor of deterministic IDs
     for table in &schema.tables {
         for col in &table.columns {
             if col.is_foreign_key {
                 if let Some(ref target_table) = col.foreign_key_target_table {
                     let source_id = format!("E_{}", sanitize_id(&table.name));
                     let target_id = format!("E_{}", sanitize_id(target_table));
-                    let rel_id = format!("R_{}", rel_counter);
-                    rel_counter += 1;
+                    // Deterministic ID: R_{SourceTable}_{ColumnName}
+                    let rel_id = format!("R_{}_{}", sanitize_id(&table.name), sanitize_id(&col.name));
+                    
+                    let source_card = col.cardinality_source.as_deref().unwrap_or("N");
+                    let target_card = col.cardinality_target.as_deref().unwrap_or("1");
 
                     code.push_str(&format!(
                         "    {}{{\"{}\"}}:::relationship\n",
                         rel_id, col.name
                     ));
-                    code.push_str(&format!("    {} ---|N| {}\n", source_id, rel_id));
-                    code.push_str(&format!("    {} ---|1| {}\n", rel_id, target_id));
+                    // Add click callback for the relationship
+                    code.push_str(&format!("    click {} callback \"Edit Relationship\"\n", rel_id));
+
+                    code.push_str(&format!("    {} ---|{}| {}\n", source_id, source_card, rel_id));
+                    code.push_str(&format!("    {} ---|{}| {}\n", rel_id, target_card, target_id));
                 }
             }
         }
@@ -163,6 +187,7 @@ pub fn generate_chen(schema: &Schema, theme: &str) -> String {
 pub fn generate_mermaid_code(schema: &Schema, style: &str, config: &MermaidConfig) -> String {
     let theme = config.theme.as_deref().unwrap_or("default");
     let curve = config.curve.as_deref().unwrap_or("basis");
+    let randomize = config.randomize.unwrap_or(false);
 
     let init_directive = if style == "chen" {
         format!(
@@ -174,7 +199,7 @@ pub fn generate_mermaid_code(schema: &Schema, style: &str, config: &MermaidConfi
     };
 
     let diagram_code = if style == "chen" {
-        generate_chen(schema, theme)
+        generate_chen(schema, theme, randomize)
     } else {
         generate_crows_foot(schema)
     };

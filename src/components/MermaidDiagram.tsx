@@ -41,7 +41,7 @@ export default function MermaidDiagram({ code, background = "light", onNodeConte
       const id = target.id || target.getAttribute("id");
       // console.log("Checking target", target.tagName, "ID:", id);
       
-      if (id && (id.startsWith("E_") || id.startsWith("A_"))) {
+      if (id && (id.startsWith("E_") || id.startsWith("A_") || id.startsWith("R_"))) {
         e.preventDefault();
         onNodeContextMenu(e, id);
         return;
@@ -49,9 +49,9 @@ export default function MermaidDiagram({ code, background = "light", onNodeConte
       
       // Also check for mermaid's internal ID patterns if standard ID is missing or modified
       // Some versions might prefix 'flowchart-'
-      if (id && id.includes("A_") && !id.startsWith("mermaid-")) {
+      if (id && (id.includes("A_") || id.includes("R_")) && !id.startsWith("mermaid-")) {
           // Attempt to extract the ID part we care about
-          const match = id.match(/(A_[a-zA-Z0-9_]+)/);
+          const match = id.match(/((?:A|R)_[a-zA-Z0-9_]+)/);
           if (match) {
              e.preventDefault();
              onNodeContextMenu(e, match[1]);
