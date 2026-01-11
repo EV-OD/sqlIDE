@@ -30,6 +30,8 @@ async fn generate_diagram(request: GenerateRequest) -> Result<GenerateResponse, 
         theme: Some("default".to_string()),
         curve: Some("basis".to_string()),
         randomize: Some(false),
+        direction: Some("TD".to_string()),
+        compact: Some(false),
     });
 
     let schema = if request.db_type == "sql" {
@@ -59,6 +61,8 @@ fn generate_mermaid(schema: Schema, style: Option<String>, config: Option<Mermai
         theme: Some("default".to_string()),
         curve: Some("basis".to_string()),
         randomize: Some(false),
+        direction: Some("TD".to_string()),
+        compact: Some(false),
     });
     generate_mermaid_code(&schema, style, &config)
 }

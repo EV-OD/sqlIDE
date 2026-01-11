@@ -24,6 +24,8 @@ export interface MermaidConfig {
   theme?: string;
   curve?: string;
   randomize?: boolean;
+  direction?: "TD" | "LR";
+  compact?: boolean;
 }
 
 export interface GenerateRequest {
@@ -134,6 +136,8 @@ export interface EditorTab {
   diagramTheme?: string;
   diagramCurve?: string;
   diagramRandomize?: boolean;
+  diagramDirection?: "TD" | "LR";
+  diagramCompact?: boolean;
   diagramBackground?: string;
   schema?: Schema;
 }
@@ -144,6 +148,8 @@ export interface DiagramSettings {
   theme: string;
   curve: string;
   randomize: boolean;
+  direction: "TD" | "LR";
+  compact: boolean;
   background: string;
 }
 

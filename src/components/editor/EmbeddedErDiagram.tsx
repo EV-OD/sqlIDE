@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Loader2, AlertCircle, RefreshCw, Layers, Spline, Shuffle } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Layers, Spline, Shuffle, ArrowDown, ArrowRight, Grid } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../../store/useAppStore";
 import MermaidDiagram from "../MermaidDiagram";
@@ -30,6 +30,8 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
   const theme = tab.diagramTheme || diagramSettings.theme;
   const curve = tab.diagramCurve || diagramSettings.curve;
   const randomize = tab.diagramRandomize ?? diagramSettings.randomize ?? false;
+  const direction = tab.diagramDirection || diagramSettings.direction || "TD";
+  const compact = tab.diagramCompact ?? diagramSettings.compact ?? false;
   const background = tab.diagramBackground || diagramSettings.background;
 
   const buildConnectionString = (conn: SavedConnection, dbName?: string): string => {
@@ -83,6 +85,8 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
           theme,
           curve,
           randomize,
+          direction,
+          compact,
         },
       };
 
@@ -107,7 +111,7 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
       const newCode = await invoke<string>("generate_mermaid", {
         schema: newSchema,
         style,
-        config: { theme, curve, randomize },
+        config: { theme, curve, randomize, direction, compact },
       });
       setMermaidCode(newCode);
       setSchema(newSchema);
@@ -172,7 +176,7 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
     } else if (connection && mermaidCode) {
       generateDiagram();
     }
-  }, [style, theme, curve, randomize]);
+  }, [style, theme, curve, randomize, direction, compact]);
 
   // Close context menu on global click
   useEffect(() => {
@@ -243,6 +247,20 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
           <span className="text-zinc-500">{connection.dbType}</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => updateEditorTab(tab.id, { diagramDirection: direction === "TD" ? "LR" : "TD" })}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors bg-zinc-800 text-zinc-400 hover:text-zinc-300`}
+            title={direction === "TD" ? "Switch to Left-Right Layout" : "Switch to Top-Down Layout"}
+          >
+            {direction === "TD" ? <ArrowDown className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => updateEditorTab(tab.id, { diagramCompact: !compact })}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors ${compact ? "bg-purple-600/20 text-purple-400" : "bg-zinc-800 text-zinc-400 hover:text-zinc-300"}`}
+            title="Compact Grid Layout"
+          >
+            <Grid className="w-4 h-4" />
+          </button>
           <button
             onClick={() => updateEditorTab(tab.id, { diagramRandomize: !randomize })}
             className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors ${randomize ? "bg-purple-600/20 text-purple-400" : "bg-zinc-800 text-zinc-400 hover:text-zinc-300"}`}

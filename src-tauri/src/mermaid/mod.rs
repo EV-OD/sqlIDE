@@ -91,8 +91,8 @@ pub fn generate_crows_foot(schema: &Schema) -> String {
     code
 }
 
-pub fn generate_chen(schema: &Schema, theme: &str, randomize: bool) -> String {
-    let mut code = String::from("flowchart TD\n");
+pub fn generate_chen(schema: &Schema, theme: &str, randomize: bool, direction: &str, compact: bool) -> String {
+    let mut code = format!("flowchart {}\n", direction);
 
     let (entity_color, attribute_color, relationship_color) = get_theme_colors(theme);
 
@@ -152,6 +152,29 @@ pub fn generate_chen(schema: &Schema, theme: &str, randomize: bool) -> String {
         }
     }
 
+    // Grid Layout (Compact Mode)
+    // Adds invisible links to force wrapping roughly every sqrt(N) tables
+    if compact && schema.tables.len() > 2 {
+        let n = schema.tables.len();
+        let cols = (n as f64).sqrt().ceil() as usize;
+        
+        let mut sorted_tables: Vec<String> = schema.tables.iter()
+            .map(|t| sanitize_id(&t.name))
+            .collect();
+        // Sorting might help determinism, but keep original order might reflect DB better?
+        // Let's keep schema order.
+        
+        for i in 0..n {
+            if i + cols < n {
+                let current = format!("E_{}", sorted_tables[i]);
+                let next_in_col = format!("E_{}", sorted_tables[i + cols]);
+                
+                // Invisible link
+                code.push_str(&format!("    {} ~~~ {}\n", current, next_in_col));
+            }
+        }
+    }
+
     // Relationships - Always Standard Direction logic (Source ---|N| Rel ---|1| Target)
     // We do NOT randomize this part.
     // let mut rel_counter = 0; // Removing counter in favor of deterministic IDs
@@ -188,6 +211,8 @@ pub fn generate_mermaid_code(schema: &Schema, style: &str, config: &MermaidConfi
     let theme = config.theme.as_deref().unwrap_or("default");
     let curve = config.curve.as_deref().unwrap_or("basis");
     let randomize = config.randomize.unwrap_or(false);
+    let direction = config.direction.as_deref().unwrap_or("TD");
+    let compact = config.compact.unwrap_or(false);
 
     let init_directive = if style == "chen" {
         format!(
@@ -199,7 +224,7 @@ pub fn generate_mermaid_code(schema: &Schema, style: &str, config: &MermaidConfi
     };
 
     let diagram_code = if style == "chen" {
-        generate_chen(schema, theme, randomize)
+        generate_chen(schema, theme, randomize, direction, compact)
     } else {
         generate_crows_foot(schema)
     };

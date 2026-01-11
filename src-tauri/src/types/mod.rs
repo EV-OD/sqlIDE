@@ -40,6 +40,8 @@ pub struct MermaidConfig {
     pub theme: Option<String>,
     pub curve: Option<String>,
     pub randomize: Option<bool>,
+    pub direction: Option<String>,
+    pub compact: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
