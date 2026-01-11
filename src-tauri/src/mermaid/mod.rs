@@ -98,8 +98,9 @@ pub fn generate_chen(schema: &Schema, theme: &str) -> String {
 
     code.push_str(&format!("    classDef entity {};\n", entity_color));
     code.push_str(&format!("    classDef attribute {};\n", attribute_color));
-    code.push_str(&format!("    classDef derivedAttribute {},stroke-dasharray: 5 5;\n", attribute_color));
-    code.push_str(&format!("    classDef multivaluedAttribute {},stroke-width: 4px;\n", attribute_color));
+    // Using 6 3 for a clearer dashed pattern that handles curves better than equal spacing
+    code.push_str(&format!("    classDef derivedAttribute {},stroke-dasharray: 6 3;\n", attribute_color));
+    code.push_str(&format!("    classDef multivaluedAttribute {},stroke-width: 3.5px;\n", attribute_color));
     code.push_str(&format!("    classDef relationship {};\n", relationship_color));
 
     for table in &schema.tables {
@@ -126,6 +127,10 @@ pub fn generate_chen(schema: &Schema, theme: &str) -> String {
             };
 
             code.push_str(&format!("    {}([\"{}\"]):::{}\n", attr_id, label, class_name));
+            // Add interaction only if security is loose.
+            // We'll trust the frontend config to matching the click availability.
+            code.push_str(&format!("    click {} callback \"Edit Attribute\"\n", attr_id));
+            
             code.push_str(&format!("    {} --- {}\n", entity_id, attr_id));
         }
     }

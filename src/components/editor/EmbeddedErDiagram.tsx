@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Layers, Spline } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../../store/useAppStore";
 import MermaidDiagram from "../MermaidDiagram";
-import type { GenerateRequest, EditorTab, SavedConnection } from "../../types";
+import type { GenerateRequest, EditorTab, SavedConnection, Schema } from "../../types";
 
 interface EmbeddedErDiagramProps {
   tab: EditorTab;
@@ -13,7 +13,14 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
   const { connections, diagramSettings, updateEditorTab } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [mermaidCode, setMermaidCode] = useState<string>(tab.content || "");
+  const [schema, setSchema] = useState<Schema | undefined>(tab.schema);
   const [error, setError] = useState<string | null>(null);
+
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    id: string;
+  } | null>(null);
 
   // Find the connection for this diagram
   const connection = connections.find((c) => c.id === tab.connectionId);
@@ -77,17 +84,72 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
         },
       };
 
-      const result = await invoke<{ mermaidCode: string }>("generate_diagram", {
+      const result = await invoke<{ mermaidCode: string; schema: Schema }>("generate_diagram", {
         request: payload,
       });
 
       setMermaidCode(result.mermaidCode);
+      setSchema(result.schema);
       // Save the generated code to the tab
-      updateEditorTab(tab.id, { content: result.mermaidCode, isDirty: false });
+      updateEditorTab(tab.id, { content: result.mermaidCode, schema: result.schema, isDirty: false });
     } catch (err: any) {
       setError(err.toString());
     } finally {
       setLoading(false);
+    }
+  };
+
+  const regenerateFromSchema = async (newSchema: Schema) => {
+    setLoading(true);
+    try {
+      const newCode = await invoke<string>("generate_mermaid", {
+        schema: newSchema,
+        style,
+        config: { theme, curve },
+      });
+      setMermaidCode(newCode);
+      setSchema(newSchema);
+      updateEditorTab(tab.id, { content: newCode, schema: newSchema, isDirty: true });
+    } catch (err: any) {
+      console.error(err);
+      setError(err.toString());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateAttribute = async (updates: { isDerived?: boolean; isMultivalued?: boolean }) => {
+    if (!schema || !contextMenu) return;
+    
+    // Helper to match ID
+    const sanitizeId = (name: string) => name.replace(/[^a-zA-Z0-9_]/g, "");
+    
+    // Clone schema
+    const newSchema = JSON.parse(JSON.stringify(schema)) as Schema;
+    
+    let found = false;
+    for (const table of newSchema.tables) {
+        for (const col of table.columns) {
+            const id = `A_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
+            
+            // Check matches
+            if (id === contextMenu.id) {
+                if (updates.isDerived !== undefined) col.isDerived = updates.isDerived;
+                if (updates.isMultivalued !== undefined) col.isMultivalued = updates.isMultivalued;
+                found = true;
+                break;
+            }
+        }
+        if (found) break;
+    }
+    
+    if (found) {
+        setContextMenu(null);
+        await regenerateFromSchema(newSchema);
+        // Also save to file if tab has file path?
+        if (tab.filePath) {
+             await invoke("save_project_file", { filePath: tab.filePath, schema: newSchema });
+        }
     }
   };
 
@@ -100,10 +162,53 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
 
   // Regenerate when settings change
   useEffect(() => {
-    if (connection && mermaidCode) {
+    if (connection && mermaidCode && schema) {
+      regenerateFromSchema(schema);
+    } else if (connection && mermaidCode) {
       generateDiagram();
     }
   }, [style, theme, curve]);
+
+  // Close context menu on global click
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, []);
+
+  const getSelectedColumn = () => {
+    if (!contextMenu || !schema) return null;
+    // Rust sanitize_id: name.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect()
+    // It filters OUT non-alphanumeric chars (except underscore).
+    const sanitizeId = (name: string) => name.replace(/[^a-zA-Z0-9_]/g, "");
+    
+    // console.log("Searching for ID:", contextMenu.id);
+
+    // Try finding exact match first
+    for (const table of schema.tables) {
+        for (const col of table.columns) {
+            const id = `A_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
+            if (id === contextMenu.id) return col;
+        }
+    }
+    
+    // Fallback: Try match based on endsWith if mermaid added prefixes
+    for (const table of schema.tables) {
+        for (const col of table.columns) {
+            const id = `A_${sanitizeId(table.name)}_${sanitizeId(col.name)}`;
+            if (contextMenu.id.endsWith(id) || contextMenu.id.includes(id)) return col;
+        }
+    }
+
+    return null;
+  };
+
+  const selectedCol = getSelectedColumn();
+  
+  // Debug effect
+  // useEffect(() => {
+  //   if (contextMenu) console.log("Context menu open", contextMenu, "Selected Col:", selectedCol);
+  // }, [contextMenu, selectedCol]);
 
   if (!connection) {
     return (
@@ -162,8 +267,14 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
             </button>
           </div>
         ) : mermaidCode ? (
-          <div className="h-full rounded-lg overflow-hidden">
-            <MermaidDiagram code={mermaidCode} background={background as "light" | "dark" | "transparent"} />
+          <div className="h-full rounded-lg overflow-hidden relative">
+            <MermaidDiagram 
+                code={mermaidCode} 
+                background={background as "light" | "dark" | "transparent"} 
+                onNodeContextMenu={(e, id) => {
+                    setContextMenu({ x: e.clientX, y: e.clientY, id });
+                }}
+            />
           </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-zinc-400">
@@ -177,6 +288,46 @@ export default function EmbeddedErDiagram({ tab }: EmbeddedErDiagramProps) {
           </div>
         )}
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div 
+            className="fixed bg-zinc-800 border border-zinc-700 rounded shadow-xl z-50 py-1 w-56"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+        >
+            {selectedCol ? (
+                <>
+                <div className="px-3 py-2 border-b border-zinc-700 mb-1">
+                    <span className="text-sm font-medium text-white block truncate">{selectedCol.name}</span>
+                    <span className="text-xs text-zinc-500 block truncate">{selectedCol.type}</span>
+                </div>
+                <button 
+                    onClick={() => handleUpdateAttribute({ isDerived: !selectedCol.isDerived })}
+                    className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 flex items-center gap-2"
+                >
+                    <div className={`w-4 h-4 border rounded flex items-center justify-center ${selectedCol.isDerived ? "bg-purple-600 border-purple-600" : "border-zinc-500"}`}>
+                        {selectedCol.isDerived && <Layers className="w-3 h-3 text-white" />}
+                    </div>
+                    Is Derived (Dashed)
+                </button>
+                <button 
+                    onClick={() => handleUpdateAttribute({ isMultivalued: !selectedCol.isMultivalued })}
+                    className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 flex items-center gap-2"
+                >
+                    <div className={`w-4 h-4 border rounded flex items-center justify-center ${selectedCol.isMultivalued ? "bg-purple-600 border-purple-600" : "border-zinc-500"}`}>
+                        {selectedCol.isMultivalued && <Spline className="w-3 h-3 text-white" />}
+                    </div>
+                    Is Multivalued (Double)
+                </button>
+                </>
+            ) : (
+                <div className="px-3 py-2 text-sm text-zinc-400">
+                    No attribute selected ({contextMenu.id})
+                </div>
+            )}
+        </div>
+      )}
     </div>
   );
 }

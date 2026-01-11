@@ -33,6 +33,7 @@ export interface GenerateRequest {
 
 export interface GenerateResponse {
   mermaidCode: string;
+  schema: Schema;
 }
 
 export interface SavedConnection {
@@ -130,6 +131,7 @@ export interface EditorTab {
   diagramTheme?: string;
   diagramCurve?: string;
   diagramBackground?: string;
+  schema?: Schema;
 }
 
 // Diagram Settings

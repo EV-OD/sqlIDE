@@ -8,6 +8,7 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 interface MermaidDiagramProps {
   code: string;
   background?: "light" | "dark" | "transparent";
+  onNodeContextMenu?: (event: React.MouseEvent, nodeId: string) => void;
 }
 
 const BACKGROUND_CLASSES = {
@@ -22,13 +23,49 @@ const BACKGROUND_COLORS = {
   transparent: "transparent",
 };
 
-export default function MermaidDiagram({ code, background = "light" }: MermaidDiagramProps) {
+export default function MermaidDiagram({ code, background = "light", onNodeContextMenu }: MermaidDiagramProps) {
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const handleContextMenu = (e: React.MouseEvent) => {
+    // console.log("Context menu triggered", e.target);
+    if (!onNodeContextMenu) return;
 
+    let target = e.target as Element;
+    const container = e.currentTarget;
+
+    // Traverse up the DOM to find the node container
+    while (target && target !== container) {
+      const id = target.id || target.getAttribute("id");
+      // console.log("Checking target", target.tagName, "ID:", id);
+      
+      if (id && (id.startsWith("E_") || id.startsWith("A_"))) {
+        e.preventDefault();
+        onNodeContextMenu(e, id);
+        return;
+      }
+      
+      // Also check for mermaid's internal ID patterns if standard ID is missing or modified
+      // Some versions might prefix 'flowchart-'
+      if (id && id.includes("A_") && !id.startsWith("mermaid-")) {
+          // Attempt to extract the ID part we care about
+          const match = id.match(/(A_[a-zA-Z0-9_]+)/);
+          if (match) {
+             e.preventDefault();
+             onNodeContextMenu(e, match[1]);
+             return;
+          }
+      }
+
+      if (target.parentElement) {
+        target = target.parentElement;
+      } else {
+        break;
+      }
+    }
+  };
   // Close download menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -51,7 +88,17 @@ export default function MermaidDiagram({ code, background = "light" }: MermaidDi
       startOnLoad: false,
       theme: "default",
       securityLevel: "loose",
+      flowchart: {
+        htmlLabels: true
+      }
     });
+    
+    // Global callback for mermaid click events
+    (window as any).callback = (id: string) => {
+        // This is a dummy callback to enable pointer events in mermaid
+        // The actual handling is done via onContextMenu or onClick capture in parent
+        console.log("Mermaid click node:", id);
+    };
   }, []);
 
   useEffect(() => {
@@ -317,6 +364,7 @@ export default function MermaidDiagram({ code, background = "light" }: MermaidDi
               <div 
                 className="w-full h-full flex items-center justify-center p-4"
                 dangerouslySetInnerHTML={{ __html: svg }}
+                onContextMenu={handleContextMenu}
               />
             </TransformComponent>
           </>

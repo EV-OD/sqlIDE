@@ -52,6 +52,7 @@ pub struct GenerateRequest {
 pub struct GenerateResponse {
     #[serde(rename = "mermaidCode")]
     pub mermaid_code: String,
+    pub schema: Schema,
 }
 
 // SQL Editor Types

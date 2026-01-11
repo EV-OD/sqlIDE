@@ -2,9 +2,11 @@ mod types;
 mod database;
 mod mermaid;
 mod files;
+mod project_commands;
 
 use types::*;
 use database::*;
+use project_commands::*;
 use mermaid::generate_mermaid_code;
 use std::path::PathBuf;
 use std::net::TcpStream;
@@ -46,7 +48,17 @@ async fn generate_diagram(request: GenerateRequest) -> Result<GenerateResponse, 
     };
 
     let mermaid_code = generate_mermaid_code(&schema, style, &config);
-    Ok(GenerateResponse { mermaid_code })
+    Ok(GenerateResponse { mermaid_code, schema })
+}
+
+#[tauri::command]
+fn generate_mermaid(schema: Schema, style: Option<String>, config: Option<MermaidConfig>) -> String {
+    let style = style.as_deref().unwrap_or("chen");
+    let config = config.unwrap_or(MermaidConfig {
+        theme: Some("default".to_string()),
+        curve: Some("basis".to_string()),
+    });
+    generate_mermaid_code(&schema, style, &config)
 }
 
 #[tauri::command]
@@ -151,6 +163,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             generate_diagram,
+            generate_mermaid,
             test_connection,
             test_connection_params,
             get_databases,
@@ -165,6 +178,8 @@ pub fn run() {
             get_default_project_path,
             get_next_project_folder,
             path_exists,
+            save_project_file,
+            load_project_file,
             // MariaDB offline manager commands
             mariadb_install,
             mariadb_bundle_exists,
