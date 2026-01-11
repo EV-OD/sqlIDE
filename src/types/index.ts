@@ -5,6 +5,8 @@ export interface Column {
   isForeignKey: boolean;
   foreignKeyTargetTable?: string;
   foreignKeyTargetColumn?: string;
+  isMultivalued?: boolean;
+  isDerived?: boolean;
 }
 
 export interface Table {

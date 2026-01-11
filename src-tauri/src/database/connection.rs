@@ -104,6 +104,8 @@ pub async fn get_postgres_schema(connection_string: &str) -> Result<Schema, Stri
             is_foreign_key: false,
             foreign_key_target_table: None,
             foreign_key_target_column: None,
+            is_multivalued: false,
+            is_derived: false,
         });
     }
 
@@ -219,6 +221,8 @@ pub async fn get_mysql_schema(connection_string: &str) -> Result<Schema, String>
             is_foreign_key: false,
             foreign_key_target_table: None,
             foreign_key_target_column: None,
+            is_multivalued: false,
+            is_derived: false,
         });
     }
 

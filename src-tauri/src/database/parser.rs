@@ -96,6 +96,8 @@ pub fn parse_sql_to_schema(sql: &str, dialect: &str) -> Result<Schema, String> {
                     is_foreign_key: is_fk,
                     foreign_key_target_table: fk_target_table,
                     foreign_key_target_column: fk_target_column,
+                    is_multivalued: false,
+                    is_derived: false,
                 });
             }
 

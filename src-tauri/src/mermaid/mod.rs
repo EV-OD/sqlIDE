@@ -98,6 +98,8 @@ pub fn generate_chen(schema: &Schema, theme: &str) -> String {
 
     code.push_str(&format!("    classDef entity {};\n", entity_color));
     code.push_str(&format!("    classDef attribute {};\n", attribute_color));
+    code.push_str(&format!("    classDef derivedAttribute {},stroke-dasharray: 5 5;\n", attribute_color));
+    code.push_str(&format!("    classDef multivaluedAttribute {},stroke-width: 4px;\n", attribute_color));
     code.push_str(&format!("    classDef relationship {};\n", relationship_color));
 
     for table in &schema.tables {
@@ -115,7 +117,15 @@ pub fn generate_chen(schema: &Schema, theme: &str) -> String {
                 col.name.clone()
             };
 
-            code.push_str(&format!("    {}([\"{}\"]):::attribute\n", attr_id, label));
+            let class_name = if col.is_derived {
+                "derivedAttribute"
+            } else if col.is_multivalued {
+                "multivaluedAttribute"
+            } else {
+                "attribute"
+            };
+
+            code.push_str(&format!("    {}([\"{}\"]):::{}\n", attr_id, label, class_name));
             code.push_str(&format!("    {} --- {}\n", entity_id, attr_id));
         }
     }

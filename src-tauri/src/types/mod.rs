@@ -14,6 +14,10 @@ pub struct Column {
     pub foreign_key_target_table: Option<String>,
     #[serde(rename = "foreignKeyTargetColumn")]
     pub foreign_key_target_column: Option<String>,
+    #[serde(rename = "isMultivalued", default)]
+    pub is_multivalued: bool,
+    #[serde(rename = "isDerived", default)]
+    pub is_derived: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
